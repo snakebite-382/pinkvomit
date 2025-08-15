@@ -25,16 +25,17 @@ console.log(process.env.database)
 app.get('/testdb', (req, res) => {
   const database = require('./database.js');
 
-  database.connect();
+  database.getConnection((err, conn) => {
+    conn.query('SELECT 1 + 1 AS solution', (err, rows, fields) => {
+      conn.release()
+      if (err) throw err
 
-  database.query('SELECT 1 + 1 AS solution', (err, rows, fields) => {
-    if (err) throw err
+      console.log('The solution is: ', rows[0].solution);
+      res.send("Working!")
+    })
+  });
 
-    console.log('The solution is: ', rows[0].solution);
-    res.send("Working!")
-  })
 
-  database.end();
 })
 app.listen(port, () => {
   console.log(`listening on port ${port}`);
