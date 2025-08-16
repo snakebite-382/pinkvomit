@@ -1,9 +1,15 @@
 // This is the server entrypoint
 // the only things in this file should be setting up and running the server
 const express = require('express');
+const bodyParser = require('body-parser');
 const app = express();
 const port = 3000;
 require('dotenv').config();
+
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({
+  extended: true
+}));
 
 app.use(express.static("public"));
 

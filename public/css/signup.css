@@ -1,0 +1,11 @@
+#toggle-hide {
+  font-size: 0.8rem;
+  text-decoration: underline;
+  cursor: pointer;
+  padding-bottom: 1rem;
+}
+
+.error {
+  padding: 0.5rem;
+  color: red;
+}

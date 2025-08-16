@@ -5,10 +5,32 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <%- include('partials/head') %>
+  <link rel="stylesheet" href="/css/signup.css">
 </head>
 
 <body>
+  <%- include('partials/nav') %>
   <h1>Create your PINKVOMIT account here!</h1>
+  <form name="signup-form" id="signup-form" hx-post="/auth/api/signup" hx-target="#form-result" hx-swap="outerHTML">
+    <label for="email">Email: </label><br>
+    <input type="text"  id="email" name="email" value="" hx-post="/auth/api/validate/email" hx-target="#email-error"><br>
+    <div id="email-error" class="error"></div>
+
+    <label for="password">Password: </label><br>
+    <input type="password" id="password" name="password" hx-post="/auth/api/validate/password" hx-target="#password-error"><br>
+    <div id="password-error" class="error"></div>
+
+    <label for"confirm-password">Confirm Password: </label><br>
+    <input type="password" id="confirm-password" name="confirmPassword"><br>
+    <div id="confirm-password-error" class="error"></div>
+
+    <p id="toggle-hide" class="hidden">show passwords</p>
+
+    <button>Signup</button>
+  </form>
+  <div id="form-result"></div>
+  <script src="/js/signup.js">
+  </script>
 </body>
 
 </html>
