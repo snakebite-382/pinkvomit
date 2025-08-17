@@ -6,8 +6,6 @@ const passwordInput = document.getElementById("password")
 toggleHide.addEventListener("click", toggle)
 
 function toggle() {
-  console.log("CLICK")
-  console.log(passwordInput, confirmPasswordInput)
   if (toggleHide.classList.contains("hidden")) {
     passwordInput.setAttribute("type", "text");
     confirmPasswordInput.setAttribute("type", "text");

@@ -1,9 +1,8 @@
 const express = require("express");
-const crypto = require("crypto");
-const signer = require("../jwt.js");
 const router = express.Router();
 const database = require("../../database.js");
 const argon = require("argon2");
+const { login } = require("../middleware.js");
 
 function validateEmail(email) {
   console.log(email)
@@ -41,31 +40,6 @@ function validatePassword(password) {
   return containsCapital && containsNumber;
 }
 
-async function getUserByEmail(email) {
-  let [rows] = await database.query("SELECT * FROM users WHERE email = ?", [email]);
-  return rows[0];
-}
-
-async function login(email, password) {
-  let user = await getUserByEmail(email);
-  let validPassword = await argon.verify(user.password, password)
-
-  if (validPassword) {
-    let token = {
-      email: user.email,
-      uuid: crypto.randomUUID(),
-      expiresAt: Date.now() + (2 * 60 * 60 * 1000) // set to expire in 2 hours
-    };
-
-    let signedToken = signer.sign(token);
-
-    await database.query("INSERT INTO sessions (uuid, userID, expiresAt) VALUES (?, ?, ?)", [token.uuid, user.id, token.expiresAt])
-
-    return [signedToken, token];
-  }
-
-  return null
-}
 
 router.post("/validate/email", async (req, res) => {
   console.log("HIT")
@@ -103,15 +77,15 @@ router.post("/signup", async (req, res) => {
     try {
       const hashedPassword = await argon.hash(password);
       const invalidInputsError = "<div id='form-result' class='error'>Some inputs are invalid</div>"
-      let [rows] = await database.query("SELECT email FROM users WHERE email = ?", [req.body.email]);
+      let [rows] = await database.query("SELECT email FROM users WHERE email = ?", [email]);
       if (rows.length !== 0) {
         res.send(invalidInputsError);
         return
       }
 
-      [rows] = await database.query("INSERT INTO users (email, emailVerified, password) VALUES (?, false, ?)", [req.body.email, hashedPassword])
+      [rows] = await database.query("INSERT INTO users (email, emailVerified, password) VALUES (?, false, ?)", [email, hashedPassword])
 
-      let [signedToken, _] = await login(req.body.email, req.body.password);
+      let [signedToken, _] = await login(email, password);
 
       if (signedToken) {
         res.cookie("sessionToken", signedToken, {
@@ -131,4 +105,37 @@ router.post("/signup", async (req, res) => {
     res.send("<div id='form-result' class='error'>Some inputs are invalid</div>");
   }
 });
+
+router.post("/login", async (req, res) => {
+  const { email, password } = req.body;
+
+
+  let signedToken
+
+  try {
+    [signedToken] = await login(email, password);
+  } catch (err) {
+    console.error(err)
+    res.send("<div id='form-result' class='error'>SERVER ERROR</div>");
+    return
+  }
+
+
+  if ("sessionToken" in req.cookies) {
+    res.send("<div id='form-result' class='success'>Already logged in!</div>");
+    return;
+  }
+
+  if (signedToken) {
+    res.cookie("sessionToken", signedToken, {
+      maxAge: 2 * 60 * 60 * 1000,
+      sameSite: true
+    });
+
+    res.send("<div id='form-result' class='success'>Logged in!</div>");
+  } else {
+    res.send("<div id='form-result' class='error'>Password or email is incorrect</div>");
+  }
+});
+
 module.exports = router;

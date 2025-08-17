@@ -8,8 +8,25 @@
 </head>
 
 <body>
+  <%- include('partials/nav') %>
   <h1>This is the login page for PINKVOMIT</h1>
-  <h2>Don't have an account? <a href="/auth/signup">click here</a></h2>
+
+  <form hx-post="/auth/api/login" hx-target="#form-result" hx-swap="outerHTML">
+    <label for="email">Email: </label><br>
+    <input type="text" name="email" id="email"><br>
+      
+    <label for="password">Password: </label><br>
+    <input type="password" name="password" id="password"><br>
+
+    <p id="toggle-hide">show password</p>
+    <button>Submit</button>
+  </form>
+
+  <div id="form-result"></div>
+
+  <p>Don't have an account? <a href="/auth/signup">click here</a></p>
+  <script src="/js/login.js">
+  </script>
 </body>
 
 </html>
