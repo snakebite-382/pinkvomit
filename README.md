@@ -60,8 +60,8 @@ The api endpoints to perform the login, logout, and signup actions are in a rout
 
 | Verb | Usage |
 |------|-------|
-| Get  | Get a resource (render a page, or validate an input) |
-| Post | Creates a resource in the database | 
+| Get  | Get a resource (render a page) |
+| Post | Creates a resource in the database (also used to validate form inputs) | 
 | Put  | Updates a resource in the database |
 | Delete | Deletes a resource in the database | 
 
