@@ -63,17 +63,17 @@ router.post("/create", async (req, res) => {
         await database.query("UPDATE sessions SET selectedBlogID = ? WHERE uuid = ?", [newBlog[0].id, req.token.uuid])
       }
 
-      res.send("<div id='form-result' class='success'>Blog created successfully, refresh to view it</div>")
+      res.send("<div id='create-result' class='success'>Blog created successfully, refresh to view it</div>")
     } else {
-      res.send("<div id='form-result' class='error'>Some inputs are invalid</div>");
+      res.send("<div id='create-result' class='error'>Some inputs are invalid</div>");
     }
   } catch (error) {
     console.error(error);
-    res.send("<div id='form-result' class='error'>SERVER ERROR</div>");
+    res.send("<div id='create-result' class='error'>SERVER ERROR</div>");
   }
 });
 
-router.post("/select", async (req, res) => {
+router.put("/select", async (req, res) => {
   console.log(req.token.uuid);
   if (!req.authed) {
     res.status(401).send("UNAUTH")
@@ -93,11 +93,11 @@ router.post("/select", async (req, res) => {
 
     await database.query("UPDATE sessions SET selectedBlogID = ? WHERE uuid = ?", [requestedBlog.id, req.token.uuid]); // select new one
 
-    res.sendStatus(200);
+    res.send("<div id='select-result' class='success'></div>");
     return;
   } catch (error) {
     console.error(error);
-    res.send("SERVER ERROR");
+    res.send("<div id='select-result' class='error'>SERVER ERROR</div>");
   }
 })
 

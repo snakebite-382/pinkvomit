@@ -7,6 +7,8 @@ const { login } = require("../middleware.js");
 function validateEmail(email) {
   let parts = email.split("@");
 
+  if (email.includes(" ")) return false;
+
   if (parts.length != 2) return false;
 
   let domain = parts[1].split(".");
@@ -44,22 +46,22 @@ router.post("/validate/email", async (req, res) => {
     try {
       let [rows] = await database.query("SELECT email FROM users WHERE email = ?", [req.body.email]);
       if (rows.length !== 0) {
-        res.send("Email already in use");
+        res.send("<div id='email-result' class='error'>Email already in use</div>");
       } else {
-        res.send("")
+        res.send("<div id='email-result' class='success'></div>")
       }
     } catch (err) {
     }
   } else {
-    res.send("Please use a valid email")
+    res.send("<div id='email-result' class='error'>Please use a valid email</div>")
   }
 })
 
 router.post("/validate/password", (req, res) => {
   if (validatePassword(req.body.password)) {
-    res.send("");
+    res.send("<div id='password-result' class='success'></div>");
   } else {
-    res.send("Password must be at least 10 characters with at least 1 capital and 1 number")
+    res.send("<div id='password-result' class='error'>Password must be at least 10 characters with at least 1 capital and 1 number</div>")
   }
 })
 
@@ -73,7 +75,7 @@ router.post("/signup", async (req, res) => {
   ) {
     try {
       const hashedPassword = await argon.hash(password);
-      const invalidInputsError = "<div id='form-result' class='error'>Some inputs are invalid</div>"
+      const invalidInputsError = "<div id='signup-result' class='error'>Some inputs are invalid</div>"
       let [rows] = await database.query("SELECT email FROM users WHERE email = ?", [email]);
       if (rows.length !== 0) {
         res.send(invalidInputsError);
@@ -90,16 +92,16 @@ router.post("/signup", async (req, res) => {
           sameSite: true
         })
 
-        res.send("<div id='form-result' class='success'>Account created!</div>")
+        res.send("<div id='signup-result' class='success'>Account created!</div>")
       } else {
         throw new Error("THIS SHOULD NEVER HAPPEN")
       }
     } catch (err) {
       console.error(err);
-      res.send("<div id='form-result' class='error'>SERVER ERROR</div>");
+      res.send("<div id='signup-result' class='error'>SERVER ERROR</div>");
     }
   } else {
-    res.send("<div id='form-result' class='error'>Some inputs are invalid</div>");
+    res.send("<div id='signup-result' class='error'>Some inputs are invalid</div>");
   }
 });
 
@@ -114,13 +116,13 @@ router.post("/login", async (req, res) => {
     [signedToken] = await login(email, password);
   } catch (err) {
     console.error(err)
-    res.send("<div id='form-result' class='error'>SERVER ERROR</div>");
+    res.send("<div id='login-result' class='error'>SERVER ERROR</div>");
     return
   }
 
 
   if ("sessionToken" in req.cookies) {
-    res.send("<div id='form-result' class='success'>Already logged in!</div>");
+    res.send("<div id='login-result' class='success'>Already logged in!</div>");
     return;
   }
 
@@ -130,9 +132,9 @@ router.post("/login", async (req, res) => {
       sameSite: true
     });
 
-    res.send("<div id='form-result' class='success'>Logged in!</div>");
+    res.send("<div id='login-result' class='success'>Logged in!</div>");
   } else {
-    res.send("<div id='form-result' class='error'>Password or email is incorrect</div>");
+    res.send("<div id='login-result' class='error'>Password or email is incorrect</div>");
   }
 });
 

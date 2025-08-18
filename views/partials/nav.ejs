@@ -8,7 +8,7 @@
   <% if (blogs.length === 0) { %>
     <a href="/blogs/manage">Create your first blog!</a>
   <% } else {%>
-    <select name="blog" id="blog-select" hx-post="/blogs/api/select"/> <!--Used to set current blog-->
+    <select name="blog" id="blog-select" hx-put="/blogs/api/select" hx-swap="none"/> <!--Used to set current blog-->
     <% for(let i = 0; i < blogs.length; i++) { %>
       <option value="<%= blogs[i].id %>"><%= blogs[i].title %></option>
     <% } %>
