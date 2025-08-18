@@ -124,7 +124,7 @@ The point of htmx is to allow any html element to send http requests and to cont
 - [ ] Move most of the info in the readme to the wiki tab
 - [x] Make all API endpoints compliant with HTMX requirements
 - [x] Make all HTTP verbs compliant
-- [ ] Switch to using [mysql-migrations](https://www.npmjs.com/package/mysql-migrations)
+- [ ] Switch to using [mysql2-migrations](https://www.npmjs.com/package/mysql2-migrations)
 - [ ] Allow logout
 - [ ] Allow blog deletion
 - [ ] Add limit of 10 blogs per account
