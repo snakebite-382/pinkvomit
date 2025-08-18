@@ -117,7 +117,9 @@ The point of htmx is to allow any html element to send http requests and to cont
 | error | Generic error | 4xx or 5xx |
 | warning | Generic warning | 200 or 4xx |
 
-## TODO
+## TODO (in no particular order)
+- [ ] Make it pretty
+- [ ] Move most of the info in the readme to the wiki tab
 - [ ] Make all API endpoints compliant with HTMX requirements
 - [ ] Make all HTTP verbs compliant
 - [ ] Switch to using [mysql-migrations](https://www.npmjs.com/package/mysql-migrations)
