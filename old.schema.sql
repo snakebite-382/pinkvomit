@@ -1,4 +1,5 @@
 -- MySQL dump 10.13  Distrib 8.0.42, for Linux (x86_64)
+-- THIS FILE IS OUT OF DATE AND IS ONLY KEPT AS A REFERENCE, PLEASE USE MIGRATION SYSTEM
 --
 -- Host: localhost    Database: pinkvomit
 -- ------------------------------------------------------

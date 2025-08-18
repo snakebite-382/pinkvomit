@@ -22,7 +22,7 @@ To run this project you will need the following locally installed:
 2) in your terminal, navigate to the repo and run `npm install`
 4) create a local mysql database (setting up your database can either be done through the CLI or through a GUI like dbeaver)
 5) create a database user that can access your local database using a password
-6) use the schema.sql file to setup the schema in your database (THIS WILL SOON BE REPLACED WITH PROPER MIGRATIONS)
+6) run `npm run migrations refresh` to run all migrations bringing your database up to date (DO NOT USE old.schema.sql, and see the [MySql](#MySql) section for a warning about the `refresh` command)
 7) create a .env file following the format of the .env.example file 
 
 ## Running
@@ -43,6 +43,12 @@ When contributing changes:
 
 This project uses an express.js server to serve ejs templates using htmx for quality of life.
 The database uses MySql with the node MySql2 driver to write queries in plain SQL.
+
+### MySql
+
+All changes to the database should be done via migrations. All documentation about the migrations module used can be found [here](https://github.com/DyatkoGleb/node-mysql2-migrations). There is an npm script to run the migrations so instead of `node migration.js <command>` you would run `npm run migrations <command>`. This is because npm scripts are path agnostic and using the node command requires specifying where the file is relative to the current working directory. Be careful using `npm run migrations refresh` as it will wipe the database and then apply all migrations, you should be using `npm run migrations up` most of the time to apply only pending migrations without deleting anything or running unneeded migrations.
+
+Please do not use this.timestamps() when creating tables, they don't auto update and that's a pain in the ass instead use the timestamps() function from fix.js in the migrations folder.
 
 ### Express
 
@@ -124,7 +130,7 @@ The point of htmx is to allow any html element to send http requests and to cont
 - [ ] Move most of the info in the readme to the wiki tab
 - [x] Make all API endpoints compliant with HTMX requirements
 - [x] Make all HTTP verbs compliant
-- [ ] Switch to using [mysql2-migrations](https://www.npmjs.com/package/mysql2-migrations)
+- [x] Switch to using [mysql2-migrations](https://github.com/DyatkoGleb/node-mysql2-migrations)
 - [ ] Allow logout
 - [ ] Allow blog deletion
 - [ ] Add limit of 10 blogs per account

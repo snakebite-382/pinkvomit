@@ -2,12 +2,9 @@
 // the only things in this file should be setting up and running the server
 const express = require('express');
 
-require('dotenv').config();
-
 const bodyParser = require('body-parser');
 const cookieParser = require('cookie-parser');
 
-const database = require('./database.js');
 const { keepAlive, authenticate, fetchUser } = require('./auth/middleware.js');
 
 const render = require('./templating.js');

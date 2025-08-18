@@ -60,7 +60,7 @@ router.post("/create", async (req, res) => {
       const [newBlog] = await database.query("INSERT INTO blogs (userID, title, stylesheet) VALUES (?, ?, ?)", [req.user.id, req.body.title, ""]);;
 
       if (req.blogs.length === 0) {
-        await database.query("UPDATE sessions SET selectedBlogID = ? WHERE uuid = ?", [newBlog[0].id, req.token.uuid])
+        await database.query("UPDATE sessions SET selectedBlogID = ? WHERE uuid = ?", [newBlog[0].insertId, req.token.uuid])
       }
 
       res.send("<div id='create-result' class='success'>Blog created successfully, refresh to view it</div>")
