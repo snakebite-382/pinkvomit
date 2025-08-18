@@ -49,7 +49,7 @@ module.exports = {
   },
 
   keepAlive: async (req, res, next) => {
-    if (!req.cookies.hasOwnProperty("sessionToken")) {
+    if (!("sessionToken" in req.cookies)) {
       return next();
     }
 
