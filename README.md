@@ -118,6 +118,8 @@ The point of htmx is to allow any html element to send http requests and to cont
 | warning | Generic warning | 200 or 4xx |
 
 ## TODO (in no particular order)
+- [ ] add a nice logger
+- [ ] add an admin dashboard
 - [ ] Make it pretty
 - [ ] Move most of the info in the readme to the wiki tab
 - [x] Make all API endpoints compliant with HTMX requirements
