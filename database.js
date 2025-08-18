@@ -8,7 +8,6 @@ const settings = {
   password: process.env.databasepassword,
   database: process.env.database
 }
-console.log(settings)
 const pool = mysql.createPool(settings);
 
 

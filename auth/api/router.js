@@ -5,7 +5,6 @@ const argon = require("argon2");
 const { login } = require("../middleware.js");
 
 function validateEmail(email) {
-  console.log(email)
   let parts = email.split("@");
 
   if (parts.length != 2) return false;
@@ -15,7 +14,6 @@ function validateEmail(email) {
   if (domain.length != 2) return false;
 
   if (domain[1].length < 2) return false; // the top level domain after the . is at least 2 fromCharCode();
-  console.log("PASS")
 
   return true;
 }
@@ -42,7 +40,6 @@ function validatePassword(password) {
 
 
 router.post("/validate/email", async (req, res) => {
-  console.log("HIT")
   if (validateEmail(req.body.email)) {
     try {
       let [rows] = await database.query("SELECT email FROM users WHERE email = ?", [req.body.email]);

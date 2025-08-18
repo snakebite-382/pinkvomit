@@ -1,3 +1,4 @@
+-- OUT OF DATE
 USE `pinkvomit`;
 
 CREATE TABLE IF NOT EXISTS `users` (

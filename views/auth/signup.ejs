@@ -4,12 +4,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <%- include('partials/head') %>
+  <%- include('../partials/head') %>
   <link rel="stylesheet" href="/css/signup.css">
 </head>
 
 <body>
-  <%- include('partials/nav') %>
+  <%- include('../partials/nav') %>
   <h1>Create your PINKVOMIT account here!</h1>
   <form name="signup-form" id="signup-form" hx-post="/auth/api/signup" hx-target="#form-result" hx-swap="outerHTML">
     <label for="email">Email: </label><br>

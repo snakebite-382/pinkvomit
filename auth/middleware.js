@@ -32,7 +32,7 @@ module.exports = {
 
       if (rows.length === 0) {
         req.authed = false;
-        req.token = false;
+        req.token = null;
         return next();
       }
     } catch (err) {
@@ -48,14 +48,14 @@ module.exports = {
     next();
   },
 
-  keepAlive: async (req, _, next) => {
-    if (!("sessionToken" in req.cookies)) {
+  keepAlive: async (req, res, next) => {
+    if (!req.cookies.hasOwnProperty("sessionToken")) {
       return next();
     }
 
     let decodedToken = signer.decode(req.cookies.sessionToken);
 
-    if (Date.now() >= decodedToken.exp + 15 * 60 * 1000) { // if will token be expired in 15 minutes
+    if (Date.now() + (15 * 60 * 1000) >= decodedToken.exp) { // if will token be expired in 15 minutes
       try {
         let user = await getUserByEmail(decodedToken.email);
 
@@ -66,7 +66,7 @@ module.exports = {
           exp: Date.now() + (2 * 60 * 60 * 1000)
         };
 
-        let signedToken = await signer.sign(token)
+        let signedToken = signer.sign(token)
 
         res.cookie("sessionToken", signedToken, {
           maxAge: 2 * 60 * 60 * 1000,
@@ -85,6 +85,31 @@ module.exports = {
     next()
   },
 
+  fetchUser: async (req, _, next) => {
+    if (!req.authed) {
+      req.user = null;
+      req.blogs = [];
+      req.selectedBlog = null;
+      return next();
+    }
+
+    try {
+      req.user = await getUserByEmail(req.token.email);
+      const [blogs] = await database.query("SELECT * FROM blogs WHERE userID = ?", [req.user.id]);
+
+      let [sessions] = await database.query("SELECT selectedBlogID FROM sessions WHERE uuid = ?", [req.token.uuid]);
+
+      const [selectedBlogs] = await database.query("SELECT * FROM blogs WHERE id = ?", [sessions[0].selectedBlogID]);
+
+      req.blogs = blogs;
+      req.selectedBlog = selectedBlogs[0];
+
+      return next();
+    } catch (error) {
+      console.error(error);
+      return next();
+    }
+  },
 
   login: async (email, password) => {
     let user = await getUserByEmail(email);

@@ -37,3 +37,10 @@ img {
   padding: 0.5rem;
   color: red;
 }
+
+#nav {
+  display: flex;
+  flex-direction: horizontal;
+  justify-content: center;
+  gap: 1rem;
+}

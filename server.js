@@ -8,13 +8,12 @@ const bodyParser = require('body-parser');
 const cookieParser = require('cookie-parser');
 
 const database = require('./database.js');
-const { keepAlive } = require('./auth/middleware.js');
+const { keepAlive, authenticate, fetchUser } = require('./auth/middleware.js');
+
+const render = require('./templating.js');
 
 const app = express();
 const port = 3000;
-
-
-console.log(process.env.databaseuser)
 
 app.use(bodyParser.json());
 app.use(cookieParser());
@@ -27,16 +26,21 @@ app.use(express.static("public"));
 app.set('view engine', 'ejs');
 app.set('views', './views');
 
-app.use(keepAlive)
+app.use(keepAlive);
+app.use(authenticate);
+app.use(fetchUser);
 
 // basic example of how to render a page using the homepage.
 // other pages should have their own router 
 app.get('/', (req, res) => {
-  res.render('index', { title: "HOME" });
+  render(req, res, "index", "HOME");
 })
 
 const authRouter = require('./auth/router.js');
 app.use('/auth', authRouter);
+
+const blogsRouter = require('./blogs/router.js');
+app.use('/blogs', blogsRouter);
 
 app.listen(port, () => {
   console.log(`listening on port ${port}`);
