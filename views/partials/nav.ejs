@@ -2,8 +2,10 @@
 <li><a href="/">Home</a></li>
 
 <% if (authed) {%>
-  <li><a href="" hx-delete="/auth/api/logout">Logout</a></li>
+  <li><a href="/posts/timeline">Timeline</a></li>
+  <li><a href="/posts/create">Create Post</a></li>
   <li><a href="/blogs/manage">Manage blogs</a></li>
+  <li><a href="" hx-delete="/auth/api/logout">Logout</a></li>
 
   <li>
   <% if (blogs.length === 0) { %>

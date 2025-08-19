@@ -92,6 +92,7 @@ router.post("/signup", async (req, res) => {
           sameSite: true
         })
 
+        res.set("HX-Redirect", "/")
         res.send("<div id='signup-result' class='success'>Account created!</div>")
       } else {
         throw new Error("THIS SHOULD NEVER HAPPEN")

@@ -124,7 +124,7 @@ module.exports = {
 
       let signedToken = signer.sign(token);
 
-      await database.query("INSERT INTO sessions (uuid, userID, expiresAt) VALUES (?, ?, ?)", [token.uuid, user.id, token.exp])
+      await database.query("INSERT INTO sessions (uuid, userID, expiresAt, selectedBlogID) VALUES (?, ?, ?, ?)", [token.uuid, user.id, token.exp, user.mainBlogID])
 
       return [signedToken, token, true];
     }

@@ -12,7 +12,9 @@ const render = require('./templating.js');
 const app = express();
 const port = 3000;
 
-app.use(express.json());
+app.use(express.json({
+  type: ['application/json', 'text/json']
+}));
 app.use(express.urlencoded());
 app.use(cookieParser());
 
@@ -36,6 +38,9 @@ app.use('/auth', authRouter);
 
 const blogsRouter = require('./blogs/router.js');
 app.use('/blogs', blogsRouter);
+
+const postsRouter = require('./posts/router.js');
+app.use("/posts", postsRouter);
 
 app.listen(port, () => {
   console.log(`listening on port ${port}`);

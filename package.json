@@ -15,7 +15,9 @@
     "dotenv": "^17.2.1",
     "ejs": "^3.1.10",
     "express": "^5.1.0",
+    "insane": "^2.6.2",
     "jsonwebtoken": "^9.0.2",
+    "marked": "^16.2.0",
     "mysql2": "^3.14.3",
     "mysql2-migration": "^2.2.1",
     "nodemon": "^3.1.10"

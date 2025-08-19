@@ -53,7 +53,6 @@ router.post("/create", async (req, res) => {
     return;
   }
 
-  res.set("HX-Refresh", true);
 
   try {
     const [valid, _] = await validateTitle(req.body.title, req.user.id)
@@ -61,9 +60,13 @@ router.post("/create", async (req, res) => {
     if (valid) {
       const [newBlog] = await database.query("INSERT INTO blogs (userID, title, stylesheet) VALUES (?, ?, ?)", [req.user.id, req.body.title, ""]);;
 
+      await database.query("UPDATE sessions SET selectedBlogID = ? WHERE uuid = ?", [newBlog.insertId, req.token.uuid])
+
       if (req.blogs.length === 0) {
-        await database.query("UPDATE sessions SET selectedBlogID = ? WHERE uuid = ?", [newBlog[0].insertId, req.token.uuid])
+        await database.query("UPDATE users SET mainBlogID = ? WHERE id = ?", [newBlog.insertId, req.user.id]);
       }
+
+      res.set("HX-Refresh", true);
 
       res.send("<div id='create-result' class='success'>Blog created successfully, refresh to view it</div>")
     } else {
@@ -76,7 +79,6 @@ router.post("/create", async (req, res) => {
 });
 
 router.put("/select", async (req, res) => {
-  console.log(req.token.uuid);
   if (!req.authed) {
     res.status(401).send("UNAUTH")
     return;
@@ -113,10 +115,20 @@ router.post("/delete/:id", async (req, res) => {
 
   try {
     let [ownsBlog] = await database.query("SELECT id FROM blogs WHERE id = ? AND userID = ?", [req.params.id, req.user.id])
+    let [mainBlog] = await database.query("SELECT mainBlogID FROM users WHERE id = ? AND mainBlogID = ?", [req.user.id, req.params.id]);
+    let [selectedBlog] = await database.query("SELECT selectedBlogID FROM sessions WHERE uuid = ? AND selectedBlogID = ?", [req.token.uuid, req.params.id])
 
     if (ownsBlog.length === 0) {
       res.status(401).send("UNAUTH");
       return;
+    }
+
+    if (mainBlog.length !== 0) {
+      await database.query("UPDATE users SET mainBlogID = ? WHERE id = ?", [null, req.user.id])
+    }
+
+    if (selectedBlog.length !== 0) {
+      await database.query("UPDATE sessions SET selectedBlogID = ? WHERE uuid = ?", [null, req.token.uuid])
     }
 
     await database.query("DELETE FROM blogs WHERE id = ?", [req.params.id])
