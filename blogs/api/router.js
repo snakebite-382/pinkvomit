@@ -53,6 +53,8 @@ router.post("/create", async (req, res) => {
     return;
   }
 
+  res.set("HX-Refresh", true);
+
   try {
     const [valid, _] = await validateTitle(req.body.title, req.user.id)
 
@@ -98,6 +100,31 @@ router.put("/select", async (req, res) => {
   } catch (error) {
     console.error(error);
     res.send("<div id='select-result' class='error'>SERVER ERROR</div>");
+  }
+})
+
+router.post("/delete/:id", async (req, res) => {
+  if (!req.authed) {
+    res.status(401).send("UNAUTH");
+    return;
+  }
+
+  res.set("HX-Refresh", true)
+
+  try {
+    let [ownsBlog] = await database.query("SELECT id FROM blogs WHERE id = ? AND userID = ?", [req.params.id, req.user.id])
+
+    if (ownsBlog.length === 0) {
+      res.status(401).send("UNAUTH");
+      return;
+    }
+
+    await database.query("DELETE FROM blogs WHERE id = ?", [req.params.id])
+
+    res.send("<div id='#delete-result' class='success'>Deleted!</div>")
+  } catch (error) {
+    console.error(error);
+    res.send("<div id='delete-result' class='error'> ")
   }
 })
 

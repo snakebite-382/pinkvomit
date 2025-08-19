@@ -11,9 +11,12 @@
   <%- include('../partials/nav') %>
 
   <% if (blogs) {  %>
-    <% for(let i = 0; i < blogs.length; i++) { %>
-      <%= blogs[i].title %><br>
-    <% } %>
+    <ul>
+      <% for(let i = 0; i < blogs.length; i++) { %>
+        <li><%= blogs[i].title %> <button hx-post="/blogs/api/delete/<%= blogs[i].id %>" hx-confirm="Do you wish to delete <%= blogs[i].title %>" hx-target="#delete-result" hx-swap="outerHTML">Delete</button></li>
+      <% } %>
+    </ul>
+    <div id="delete-result"></div>
   <% } else { %>
       <h1>You don't have any blogs, make your first one to get started</h1>
   <% } %>
@@ -21,8 +24,8 @@
   <h2>Create new blog</h2>
   <form hx-post="/blogs/api/create" hx-target="#create-result" hx-swap="outerHTML">
     <label for="title">Blog Title</label>
-    <input name="title" id="title" type="title" hx-post="/blogs/api/validate/title" hx-target="#title-error" hx-swap="innerHTML"/>
-    <div id="title-error" class="error"></div>
+    <input name="title" id="title" type="title" hx-post="/blogs/api/validate/title" hx-target="#title-error" hx-swap="outerHTML"/>
+    <div id="title-result"></div>
     <button>Submit</button>
   </form>
   <div id="create-result"></div>

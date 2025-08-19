@@ -1,7 +1,8 @@
 <ul id="nav">
 <li><a href="/">Home</a></li>
-<li><a href="/auth/login">Login</a></li>
+
 <% if (authed) {%>
+  <li><a href="" hx-delete="/auth/api/logout">Logout</a></li>
   <li><a href="/blogs/manage">Manage blogs</a></li>
 
   <li>
@@ -15,5 +16,8 @@
     </select>
   <% } %>
   </li>
+
+<% } else { %>
+  <li><a href="/auth/login">Login</a></li>
 <% } %>
 </ul>

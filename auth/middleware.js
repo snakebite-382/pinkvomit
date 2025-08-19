@@ -126,10 +126,10 @@ module.exports = {
 
       await database.query("INSERT INTO sessions (uuid, userID, expiresAt) VALUES (?, ?, ?)", [token.uuid, user.id, token.exp])
 
-      return [signedToken, token];
+      return [signedToken, token, true];
     }
 
-    return [null, null];
+    return [null, null, false];
   },
 
   getUserByEmail: getUserByEmail,

@@ -108,12 +108,10 @@ router.post("/signup", async (req, res) => {
 router.post("/login", async (req, res) => {
   const { email, password } = req.body;
 
-  res.set("HX-Refresh", true);
-
-  let signedToken
+  let signedToken, loggedIn
 
   try {
-    [signedToken] = await login(email, password);
+    [signedToken, _, loggedIn] = await login(email, password);
   } catch (err) {
     console.error(err)
     res.send("<div id='login-result' class='error'>SERVER ERROR</div>");
@@ -126,16 +124,36 @@ router.post("/login", async (req, res) => {
     return;
   }
 
-  if (signedToken) {
+  if (loggedIn) {
     res.cookie("sessionToken", signedToken, {
       maxAge: 2 * 60 * 60 * 1000,
       sameSite: true
     });
+
+    res.set("HX-Redirect", "/")
 
     res.send("<div id='login-result' class='success'>Logged in!</div>");
   } else {
     res.send("<div id='login-result' class='error'>Password or email is incorrect</div>");
   }
 });
+
+router.delete("/logout", async (req, res) => {
+  if (!req.authed) {
+    res.status(401).send("why?");
+    return;
+  }
+
+  res.set("HX-Redirect", "/")
+
+  try {
+    await database.query("DELETE FROM sessions WHERE uuid = ? AND userID = ?", [req.token.uuid, req.user.id])
+  } catch (error) {
+    console.error(error);
+  }
+
+  res.clearCookie("sessionToken");
+  res.sendStatus(200);
+})
 
 module.exports = router;

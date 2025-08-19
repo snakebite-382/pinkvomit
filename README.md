@@ -2,6 +2,7 @@
 
 This is the development repo for PINKVOMIT.
 
+
 # Documentation
 
 ## Installation
@@ -113,7 +114,11 @@ All pages should be in the views folder in a subfolder based on their routing (e
 
 ### HTMX
 
-The point of htmx is to allow any html element to send http requests and to control how the responses are handled by targeting different elements in the DOM to swap with the response with. Because of this all API endpoints should return valid html contained in a div with an id of "last-word-in-api-route"-result (for example /auth/api/login should return a div with id="login-result"). The response div should also have a class to communicate the status of the request. The only exception is unauthorized requests can simply be send a 401 status code and an optional message of "UNAUTH". All response classes should have a universal styling specified in main.css
+The point of htmx is to allow any html element to send http requests and to control how the responses are handled by targeting different elements in the DOM to swap with the response with. Because of this all API endpoints should return valid html contained in a div with an id of "last-word-in-api-route"-result (for example /auth/api/login should return a div with id="login-result"). 
+
+The response div should also have a class to communicate the status of the request. The only exception is unauthorized requests can simply be send a 401 status code and an optional message of "UNAUTH". All response classes should have a universal styling specified in main.css
+
+The only time you don't need to send a result div is if you do a redirect. You should prefer to use the Hx-Redirect header over res.redirect()
 
 #### Response classes
 
