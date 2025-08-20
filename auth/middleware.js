@@ -113,6 +113,12 @@ module.exports = {
 
   login: async (email, password) => {
     let user = await getUserByEmail(email);
+
+    if (user === undefined) {
+      // invalid email
+      return [null, null, false];
+    }
+
     let validPassword = await argon.verify(user.password, password)
 
     if (validPassword) {

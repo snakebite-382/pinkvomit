@@ -107,6 +107,11 @@ router.post("/signup", async (req, res) => {
 });
 
 router.post("/login", async (req, res) => {
+  if (req.authed) {
+    res.send("<div id='login-result' class='success'>Already logged in!</div>");
+    return;
+  }
+
   const { email, password } = req.body;
 
   let signedToken, loggedIn
@@ -117,12 +122,6 @@ router.post("/login", async (req, res) => {
     console.error(err)
     res.send("<div id='login-result' class='error'>SERVER ERROR</div>");
     return
-  }
-
-
-  if ("sessionToken" in req.cookies) {
-    res.send("<div id='login-result' class='success'>Already logged in!</div>");
-    return;
   }
 
   if (loggedIn) {
