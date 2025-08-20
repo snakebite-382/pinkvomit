@@ -10,25 +10,39 @@
 <body>
   <%- include('../partials/nav') %>
 
-  <% if (blogs) {  %>
-    <ul>
-      <% for(let i = 0; i < blogs.length; i++) { %>
-        <li><%= blogs[i].title %> <button hx-post="/blogs/api/delete/<%= blogs[i].id %>" hx-confirm="Do you wish to delete <%= blogs[i].title %>" hx-target="#delete-result" hx-swap="outerHTML">Delete</button></li>
-      <% } %>
-    </ul>
-    <div id="delete-result"></div>
-  <% } else { %>
-      <h1>You don't have any blogs, make your first one to get started</h1>
-  <% } %>
+    <% if (blogs) { %>
+      <ul>
+        <% for(let i=0; i < blogs.length; i++) { %>
+          <li>
+            <%= blogs[i].title %>
+              <%= blogs[i].id==selectedBlog.id ? '(selected)' : '' %>
+                <%= user.mainBlogID==blogs[i].id ? "(main blog)" : "" %>
+                  <button hx-post="/blogs/api/delete/<%= blogs[i].id %>"
+                    hx-confirm="Do you wish to delete <%= blogs[i].title %>" hx-target="#delete-result"
+                    hx-swap="outerHTML">
+                    Delete
+                  </button>
+                  <button hx-put="/blogs/api/select" hx-vals='{"blog" : "<%= blogs[i].id%>" }'
+                    hx-swap="none">Select</button>
+                  <button hx-put="/blogs/api/select/main" hx-vals='{"blog" : "<%= blogs[i].id %>" }'
+                    hx-swap="none">Select Main</button>
+          </li>
+          <% } %>
+      </ul>
+      <div id="delete-result"></div>
+      <% } else { %>
+        <h1>You don't have any blogs, make your first one to get started</h1>
+        <% } %>
 
-  <h2>Create new blog</h2>
-  <form hx-post="/blogs/api/create" hx-target="#create-result" hx-swap="outerHTML">
-    <label for="title">Blog Title</label>
-    <input name="title" id="title" type="title" hx-post="/blogs/api/validate/title" hx-target="#title-error" hx-swap="outerHTML"/>
-    <div id="title-result"></div>
-    <button>Submit</button>
-  </form>
-  <div id="create-result"></div>
+          <h2>Create new blog</h2>
+          <form hx-post="/blogs/api/create" hx-target="#create-result" hx-swap="outerHTML">
+            <label for="title">Blog Title</label>
+            <input name="title" id="title" type="title" hx-post="/blogs/api/validate/title" hx-target="#title-error"
+              hx-swap="outerHTML" />
+            <div id="title-result"></div>
+            <button>Submit</button>
+          </form>
+          <div id="create-result"></div>
 </body>
 
 </html>

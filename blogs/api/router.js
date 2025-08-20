@@ -87,10 +87,10 @@ router.put("/select", async (req, res) => {
   res.set("HX-Refresh", true);
 
   try {
-    let [requestedBlog] = await database.query("SELECT * FROM blogs WHERE id = ?", [req.body.blog]);
+    let [requestedBlog] = await database.query("SELECT id, userID FROM blogs WHERE id = ?", [req.body.blog]);
     requestedBlog = requestedBlog[0]
 
-    if (requestedBlog.userID !== req.user.id) {
+    if (requestedBlog.userID != req.user.id) {
       res.status(401).send("UNAUTH");
       return;
     }
@@ -102,6 +102,33 @@ router.put("/select", async (req, res) => {
   } catch (error) {
     console.error(error);
     res.send("<div id='select-result' class='error'>SERVER ERROR</div>");
+  }
+})
+
+router.put("/select/main", async (req, res) => {
+  if (!req.authed) {
+    res.status(401).send("UNAUTH");
+    return;
+  }
+
+  res.set("HX-Refresh", true);
+
+
+  try {
+    let [requestedBlog] = await database.query("SELECT id, userID FROM blogs where id = ?", [req.body.blog]);
+    requestedBlog = requestedBlog[0];
+
+    if (requestedBlog.userID != req.user.id) {
+      res.status(401).send("UNAUTH");
+      return;
+    }
+
+    await database.query("UPDATE users SET mainBlogID = ? WHERE id = ?", [requestedBlog.id, req.user.id]);
+    res.send("<div id='main-result' class='success'>Blog selected as main blog</div>")
+    return;
+  } catch (error) {
+    console.error(error)
+    res.send("<div id='main-result' class='error'>SEVER ERROR</div>")
   }
 })
 
