@@ -28,8 +28,17 @@ router.get("/timeline", async (req, res) => {
     let renderedPosts = [];
 
     for (let i = 0; i < posts.length; i++) {
-      console.log(posts[i])
-      renderedPosts.push(`<div id="post" timestamp="${Date.parse(posts[i].created_at)}">${renderMarkdown(posts[i].content)}</div>`)
+      let [blog] = await database.query(`SELECT title, id FROM blogs WHERE id = ?`, [posts[i].blogID]);
+      blog = blog[0];
+
+      renderedPosts.push(`
+        <div class="post timestamp="${Date.parse(posts[i].created_at)}">
+          <div class="post-header"><a href="/blogs/view/${encodeURIComponent(blog.title)}">${blog.title}:</a></div>
+          <div class="markdown">
+            ${renderMarkdown(posts[i].content)}
+          </div>
+        </div>
+      `)
     }
 
     console.log(renderedPosts.join(""))

@@ -214,7 +214,7 @@ router.post("/search", async (req, res) => {
     const [blogs] = await database.query("SELECT title FROM blogs WHERE MATCH(title) AGAINST (? IN NATURAL LANGUAGE MODE)", [req.body.search]);
 
     const renderedBlogs = blogs.map((blog) => {
-      return `<div class='search-result'><a href='/blogs/view/${blog.title}'>${blog.title}</a></div>`
+      return `<div class='search-result'><a href='/blogs/view/${encodeURIComponent(blog.title)}'>${blog.title}</a></div>`
     }).join("");
 
     console.log(renderedBlogs)

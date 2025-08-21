@@ -10,6 +10,27 @@ router.get("/manage", (req, res) => {
   render(req, res, "blogs/manage", "MANAGE BLOGS")
 })
 
+router.get("/view/id/:id", async (req, res) => {
+  let blogTitle;
+  try {
+    [blogTitle] = await database.query("SELECT title FROM blogs WHERE id = ?", [req.params.id]);
+
+    if (blogTitle.length === 0) {
+      res.set("Hx-Redirect", "/");
+      res.send("<div id='view-result' class='error'> Blog Not Found! Redirecting...</div>")
+    }
+
+    blogTitle = blogTitle[0].title;
+
+  } catch (error) {
+    console.error(error);
+    res.sendStatus(500)
+    return;
+  }
+  res.set("Hx-Redirect", `/blogs/view/${blogTitle}`)
+  res.send("<div id='view-result' class='warning'>Redirecting...</div>")
+})
+
 router.get("/view/:title", async (req, res) => {
   let viewedBlog;
   let followsBlog;
