@@ -126,6 +126,7 @@ Because we are usign HTMX api endpoints should prefer to respond to requests wit
 | markdown | Contains html rendered from markdown | 200 |
 
 ## TODO (in no particular order)
+- [ ] add better searching with [typesense](https://typesense.org/)
 - [ ] add a nice logger
 - [ ] add an admin dashboard
 - [ ] Make it pretty

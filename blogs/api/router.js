@@ -204,4 +204,27 @@ router.post("/follow", async (req, res) => {
   }
 })
 
+router.post("/search", async (req, res) => {
+  if (!req.authed) {
+    res.status(401).send("UNAUTH");
+    return
+  }
+
+  try {
+    const [blogs] = await database.query("SELECT title FROM blogs WHERE MATCH(title) AGAINST (? IN NATURAL LANGUAGE MODE)", [req.body.search]);
+
+    const renderedBlogs = blogs.map((blog) => {
+      return `<div class='search-result'><a href='/blogs/view/${blog.title}'>${blog.title}</a></div>`
+    }).join("");
+
+    console.log(renderedBlogs)
+
+    res.send(renderedBlogs);
+  } catch (error) {
+    console.error(error)
+    res.send("<div id='search-result' class='error'>SERVER ERROR</div>")
+  }
+
+})
+
 module.exports = router;

@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <%- include('../partials/head') %>
+  <link rel="stylesheet" href="/css/searchBlogs.css"/>
+</head>
+
+<body>
+  <%- include('../partials/nav') %>
+  <div id="container">
+    <input 
+      type="text" 
+      name="search" 
+      id="search" 
+      hx-post="/blogs/api/search" 
+      hx-target="#search-results" 
+      hx-trigger="input">
+    <div id="search-results"></div>
+  </div>
+</body>
+
+</html>

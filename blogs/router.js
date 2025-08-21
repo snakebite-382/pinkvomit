@@ -38,4 +38,8 @@ router.get("/view/:title", async (req, res) => {
   render(req, res, "blogs/view", `VIEW ${req.query.title}`, vars)
 })
 
+router.get("/search", async (req, res) => {
+  render(req, res, "blogs/search", "SEARCH BLOGS")
+})
+
 module.exports = router;
