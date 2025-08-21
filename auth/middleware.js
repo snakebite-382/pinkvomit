@@ -73,9 +73,11 @@ module.exports = {
           sameSite: true,
         })
 
+        const [selectedBlog] = await database.query("SELECT selectedBlogID FROM sessions WHERE uuid = ?", [decodedToken.uuid]);
+
         await database.query("DELETE FROM sessions WHERE uuid = ?", [decodedToken.uuid]);
 
-        await database.query("INSERT INTO sessions (uuid, userID, expiresAt) VALUES (?, ?, ?)", [token.uuid, user.id, token.exp])
+        await database.query("INSERT INTO sessions (uuid, userID, expiresAt, selectedBlogID) VALUES (?, ?, ?, ?)", [token.uuid, user.id, token.exp, selectedBlog[0].selectedBlogID])
       } catch (error) {
         console.error(error)
         return next();
