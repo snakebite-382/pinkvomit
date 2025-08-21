@@ -3,6 +3,24 @@ const router = express.Router();
 const renderMarkdown = require("../../markdown.js");
 const database = require("../../database.js")
 
+const getLikeButton = (liked, postID) => {
+  return `
+  <svg 
+    xmlns="http://www.w3.org/2000/svg" 
+    width="20" height="20" 
+    viewBox="0 0 24 24" 
+    fill="${liked ? "red" : "none"}" 
+    stroke="currentColor" 
+    stroke-width="2" stroke-linecap="round" stroke-linejoin="round" 
+    hx-swap="outerHTML" 
+    hx-target="closest .like-interaction"
+    hx-post="/posts/api/like" 
+    hx-vals='{ "post": "${postID}" }' 
+    class="feather feather-heart clickable like-button">
+      <path fill="inherit" d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+  </svg>`
+}
+
 router.post("/timeline", async (req, res) => {
   if (!req.authed) {
     res.status(401).send("UNAUTH");
@@ -23,7 +41,20 @@ router.post("/timeline", async (req, res) => {
     let ids = [req.selectedBlog.id, ...followsIDs];
 
     const placeholders = ids.map(() => '?').join(",");
-    let [posts] = await database.query(`SELECT * FROM posts WHERE created_at < FROM_UNIXTIME(? / 1000) AND blogID IN (${placeholders}) ORDER BY created_at DESC LIMIT 20`, [req.query.before, ...ids]);
+
+    let [posts] = await database.query(
+      `SELECT posts.*,
+      COUNT(likes.id) as likeCount,
+      MAX(CASE WHEN likes.blogID = ? THEN 1 ELSE 0 END) AS likedByBlog
+      FROM posts 
+      LEFT JOIN likes ON likes.postID = posts.id 
+      WHERE posts.created_at < FROM_UNIXTIME(? / 1000) 
+        AND posts.blogID IN (${placeholders}) 
+      GROUP BY posts.id
+      ORDER BY posts.created_at DESC 
+      LIMIT 20`,
+      [req.selectedBlog.id, req.query.before, ...ids]
+    );
 
     let renderedPosts = [];
 
@@ -37,7 +68,12 @@ router.post("/timeline", async (req, res) => {
           <div class="markdown">
             ${renderMarkdown(posts[i].content)}
           </div>
-          <div class="interactions"><img class="feather clickable like-button" src="/img/heart.svg"/></div>
+          <div class="interactions">
+            <div class="like-interaction">
+              ${posts[i].likeCount}
+              ${getLikeButton(posts[i].likedByBlog, posts[i].id)}
+            </div>
+          </div>
         </div>
       `)
     }
@@ -66,6 +102,37 @@ router.post("/create", async (req, res) => {
   } catch (error) {
     console.error(error)
     res.send("<div id='create-result' class='error'>SERVER ERROR</div>")
+  }
+})
+
+router.post("/like", async (req, res) => {
+  if (!req.authed || !req.selectedBlog) {
+    res.status(401).send("UNAUTH");
+    return;
+  }
+
+
+  try {
+    let [postLiked] = await database.query("SELECT id FROM likes WHERE postID = ? AND blogID = ?", [req.body.post, req.selectedBlog.id]);
+    let liked;
+
+    if (postLiked.length === 0) {
+      liked = true;
+      await database.query("INSERT INTO likes (postID, blogID) VALUES (?, ?)", [req.body.post, req.selectedBlog.id]);
+    } else {
+      liked = false;
+      await database.query("DELETE FROM likes WHERE id = ?", [postLiked[0].id]);
+    }
+
+    let [updatedLikeCount] = await database.query("SELECT COUNT(id) AS likeCount FROM likes WHERE postID = ?", [req.body.post]);
+
+    res.send(`<div class="like-interaction">
+      ${updatedLikeCount[0].likeCount}
+      ${getLikeButton(liked, req.body.post)}
+    </div>`)
+  } catch (error) {
+    console.error(error);
+    return;
   }
 })
 
