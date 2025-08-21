@@ -12,7 +12,15 @@
     <h1>Timeline</h1>
 
     <div id="posts" hx-trigger="load" hx-target="this" hx-swap="beforeend"
-      hx-get="/posts/api/timeline?before=<%= Date.now() %>"></div>
+      hx-post="/posts/api/timeline?before=<%= Date.now() %>"></div>
+
+    <div class="center-col">
+      <button id="load-more" hx-target="#posts" hx-swap="beforeend" hx-trigger="click" disabled>load more</button>
+      <div id="load-more-error" class="error"></div>
+    </div>
+
+    <script src="/js/timeline.js"></script>
+    <%- include('../partials/footer') %>
 </body>
 
 </html>

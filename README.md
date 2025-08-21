@@ -99,7 +99,7 @@ All variables added to the Req object by middleware need to always be defined (t
 
 ### EJS
 
-All pages should be in the views folder in a subfolder based on their routing (e.g. the page for /auth/login should be in /views/auth/login.ejs). All partials need to be in the partials folder, subfolders are up to personal preference. All pages need to include the head partial, and nav partial. These partials need to be coded to work with every possible page. All pages should be rendered with the render function in templating.js as this adds all the normally available variables while allowing you to add per page variables as well.
+All pages should be in the views folder in a subfolder based on their routing (e.g. the page for /auth/login should be in /views/auth/login.ejs). All partials need to be in the partials folder, subfolders are up to personal preference. All pages need to include the head, nav, and footer partials. These partials need to be coded to work with every possible page. All pages should be rendered with the render function in templating.js as this adds all the normally available variables while allowing you to add per page variables as well.
 
 #### Available Variables
 

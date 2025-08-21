@@ -3,11 +3,12 @@ const router = express.Router();
 const renderMarkdown = require("../../markdown.js");
 const database = require("../../database.js")
 
-router.get("/timeline", async (req, res) => {
+router.post("/timeline", async (req, res) => {
   if (!req.authed) {
     res.status(401).send("UNAUTH");
     return;
   }
+
 
   if (req.selectedBlog == null) {
     res.send("<div class='error'>You need to create a blog before viewing your timeline</div>");
@@ -22,8 +23,7 @@ router.get("/timeline", async (req, res) => {
     let ids = [req.selectedBlog.id, ...followsIDs];
 
     const placeholders = ids.map(() => '?').join(",");
-
-    let [posts] = await database.query(`SELECT * FROM posts WHERE created_at < FROM_UNIXTIME(? / 1000) AND blogID IN (${placeholders}) ORDER BY created_at DESC LIMIT 10`, [req.query.before, ...ids]);
+    let [posts] = await database.query(`SELECT * FROM posts WHERE created_at < FROM_UNIXTIME(? / 1000) AND blogID IN (${placeholders}) ORDER BY created_at DESC LIMIT 20`, [req.query.before, ...ids]);
 
     let renderedPosts = [];
 
@@ -32,16 +32,16 @@ router.get("/timeline", async (req, res) => {
       blog = blog[0];
 
       renderedPosts.push(`
-        <div class="post timestamp="${Date.parse(posts[i].created_at)}">
+        <div id="${posts[i].id}" class="post" timestamp="${Date.parse(posts[i].created_at)}">
           <div class="post-header"><a href="/blogs/view/${encodeURIComponent(blog.title)}">${blog.title}:</a></div>
           <div class="markdown">
             ${renderMarkdown(posts[i].content)}
           </div>
+          <div class="interactions"><img class="feather clickable like-button" src="/img/heart.svg"/></div>
         </div>
       `)
     }
 
-    console.log(renderedPosts.join(""))
 
     res.send(renderedPosts.join(""))
   } catch (error) {

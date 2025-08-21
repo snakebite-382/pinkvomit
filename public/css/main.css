@@ -62,8 +62,44 @@ img {
   overflow-wrap: break-word;
 }
 
+.markdown ol {
+  list-style: number;
+}
+
+.markdown ul {
+  list-style-type: cirlce;
+  list-style-position: inside;
+}
+
 .post {
   padding: 10px;
   margin: 10px;
   border: 3px solid black;
+}
+
+.feather {
+  width: 24px;
+  height: 24px;
+  stroke: black;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+}
+
+.clickable {
+  cursor: pointer;
+}
+
+.center {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+.center-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+
 }
