@@ -180,7 +180,7 @@ router.post("/follow", async (req, res) => {
 
   try {
     const [ownsBlog] = await database.query("SELECT userID FROM blogs WHERE id = ? AND userID = ?", [req.query.blog, req.user.id]);
-    const [followsBlog] = await database.query("SELECT followed_blogID FROM follows WHERE following_blogID = ? AND followed_blogID = ?", [req.query.blog, req.selectedBlog.id]);
+    const [followsBlog] = await database.query("SELECT followed_blogID FROM follows WHERE following_blogID = ? AND followed_blogID = ?", [req.selectedBlog.id, req.query.blog]);
 
     if (ownsBlog.length !== 0) {
       res.send("<div id='follow-result' class='error'>You own this blog</div>");
