@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <%- include('../partials/head') %>
+    <link rel="stylesheet" href="/css/viewBlog.css" </head>
+
+<body>
+  <%- include('../partials/nav') %>
+    <div id="container">
+      <div id="header">
+        <h1>
+          <%= viewedBlog.title %>
+        </h1>
+        <% if (!followsBlog && !ownsBlog) { %>
+          <button hx-post=" /blogs/api/follow?blog=<%=viewedBlog.id %>" hx-target="#follow-result"
+            hx-swap="outerHTML">Follow</button>
+          <div id="follow-result"></div>
+          <% } %>
+      </div>
+    </div>
+</body>
+
+</html>

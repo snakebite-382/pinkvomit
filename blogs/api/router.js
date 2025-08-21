@@ -167,4 +167,41 @@ router.post("/delete/:id", async (req, res) => {
   }
 })
 
+router.post("/follow", async (req, res) => {
+  if (!req.authed) {
+    res.status(401).send("UNAUTH");
+    return;
+  }
+
+  if (req.selectedBlog == null) {
+    res.send("<div id='follow_result' class='error'>You need to make a blog before you can follow other blogs</div>");
+    return;
+  }
+
+  try {
+    const [ownsBlog] = await database.query("SELECT userID FROM blogs WHERE id = ? AND userID = ?", [req.query.blog, req.user.id]);
+    const [followsBlog] = await database.query("SELECT followed_blogID FROM follows WHERE following_blogID = ? AND followed_blogID = ?", [req.query.blog, req.selectedBlog.id]);
+
+    if (ownsBlog.length !== 0) {
+      res.send("<div id='follow-result' class='error'>You own this blog</div>");
+      return;
+    }
+
+    if (followsBlog.length !== 0) {
+      res.send("<div id='follow-result class='error'>You already follow this blog</div>");
+      return
+    }
+
+    res.set("HX-Refresh", true);
+
+    await database.query("INSERT INTO follows (followed_blogID, following_blogID) VALUES (?, ?)", [req.query.blog, req.selectedBlog.id]);
+
+    res.send("<div id='follow-result' class='success'>Followed!</div>")
+  } catch (error) {
+    console.error(error)
+    res.send("<div id='follow-result' class='error'>SERVER ERROR</div>");
+    return;
+  }
+})
+
 module.exports = router;

@@ -8,8 +8,18 @@ router.get("/timeline", async (req, res) => {
     res.status(401).send("UNAUTH");
     return;
   }
+
+  if (req.selectedBlog == null) {
+    res.send("<div class='error'>You need to create a blog before viewing your timeline</div>");
+    return;
+  }
+
   try {
-    let ids = [req.selectedBlog.id];
+    let [followsIDs] = await database.query("SELECT followed_blogID FROM follows WHERE following_blogID = ?", [req.selectedBlog.id])
+
+    followsIDs = followsIDs.map((value) => value.followed_blogID);
+
+    let ids = [req.selectedBlog.id, ...followsIDs];
 
     const placeholders = ids.map(() => '?').join(",");
 
