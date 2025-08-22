@@ -38,7 +38,7 @@ router.get("/view/:title", async (req, res) => {
   try {
     [viewedBlog] = await database.query("SELECT * FROM blogs WHERE title = ?", [req.params.title]);
     viewedBlog = viewedBlog[0];
-    [followsBlog] = await database.query("SELECT followed_blogID FROM follows WHERE followed_blogID = ?", [viewedBlog.id]);
+    [followsBlog] = await database.query("SELECT followed_blogID FROM follows WHERE followed_blogID = ? AND following_blogID = ?", [viewedBlog.id, req.selectedBlog.id]);
     followsBlog = followsBlog[0];
   } catch (error) {
     console.error(error);

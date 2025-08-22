@@ -33,3 +33,12 @@
 .closed {
   display: none;
 }
+
+.replies {
+  margin-left: 25px;
+}
+
+.comment {
+  margin-top: 10px;
+  margin-bottom: 10px;
+}

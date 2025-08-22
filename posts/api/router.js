@@ -37,9 +37,10 @@ const getCommentButton = (postID) => {
 
 const renderComment = (content, blogTitle, commentID) => {
   return `
-  <div class="comment">
+  <div class="comment" id="comment-${commentID}">
     <div class="commenter"><a href="/blogs/view/${blogTitle}">${blogTitle}</a></div>
     <div class="comment-content">${content}</div>
+    <button class="reply-button" id="reply-button-for-${commentID}">reply</button>
     <div class="replies" 
       id="replies-for-${commentID}"
       hx-trigger="load" 
@@ -47,6 +48,58 @@ const renderComment = (content, blogTitle, commentID) => {
       hx-swap="beforeend"
       hx-get="/posts/api/comments/replies?comment=${commentID}"></div>
   </div>`
+}
+
+const renderReply = (content, blogTitle, atBlogTitle, replyID) => {
+  return `
+  <div class="reply" id="reply-${replyID}">
+    <div class="replier"><a href="/blogs/view/${blogTitle}">${blogTitle}</a> : <a href="/blogs/view/${atBlogTitle}">@${atBlogTitle}</a></div>
+    <div class="reply-content">${content}</div>
+    <button class="double-reply-button" id="double-reply-button-for-${replyID}">reply</button>
+  </div>`
+}
+
+const renderPost = (id, created_at, blogTitle, content, likedByBlog, likeCount, commentCount) => {
+  return `
+  <div id="${id}" class="post" timestamp="${Date.parse(created_at)}">
+    <div class="post-header"><a href="/blogs/view/${encodeURIComponent(blogTitle)}">${blogTitle}:</a></div>
+    <div class="markdown">
+      ${renderMarkdown(content)}
+    </div>
+    <div class="interactions">
+      <div class="like-interaction">
+        ${likeCount}
+        ${getLikeButton(likedByBlog, id)}
+      </div>
+      <div class="comment-interaction" >
+        ${commentCount}
+        ${getCommentButton(id)}
+      </div>
+    </div>
+    <div 
+      class="comment-section closed" 
+      id="comment-section-for-${id}"
+    >
+      <div class="comments"
+        hx-trigger="load"
+        hx-get="/posts/api/comments?post=${id}"
+        hx-swap="beforeend"
+        hx-target="this"
+      ></div>
+      <div class="comment-input">
+        <form hx-post="/posts/api/create/comment" hx-target="previous .comments" hx-swap="beforeend" id="comment-form-for-${id}">
+          <input type="hidden" name="postID" value="${id}">
+          <input type="hidden" name="replying" value="false">
+          <input type="hidden" name="commentID" value="null">
+          <input type="hidden" name="atBlog" value="null">
+          <label for="content">Comment: </label><input name="content" type="text" minlength="2" maxlength="1024">
+          <button type="submit">post</button>
+          <div id="commenter-reply-name-for-${id}" class="commenter-reply-name"></div>
+          <button id="stop-replying-for-${id}" class="hidden stop-replying-button" >stop replying</button>
+        </form>
+      </div>
+    </div>
+  </div>`;
 }
 
 router.post("/timeline", async (req, res) => {
@@ -73,10 +126,12 @@ router.post("/timeline", async (req, res) => {
       `SELECT posts.*,
       COUNT(likes.id) as likeCount,
       MAX(CASE WHEN likes.blogID = ? THEN 1 ELSE 0 END) AS likedByBlog,
-      COUNT(comments.id) as commentCount
+      COUNT(comments.id) as commentCount,
+      blogs.title as blogTitle
       FROM posts 
       LEFT JOIN likes ON likes.postID = posts.id 
       LEFT JOIN comments ON comments.postID = posts.id
+      LEFT JOIN blogs ON posts.blogID = blogs.id
       WHERE posts.created_at < FROM_UNIXTIME(? / 1000) 
         AND posts.blogID IN (${placeholders}) 
       GROUP BY posts.id
@@ -88,47 +143,9 @@ router.post("/timeline", async (req, res) => {
     let renderedPosts = [];
 
     for (let i = 0; i < posts.length; i++) {
-      let [blog] = await database.query(`SELECT title, id FROM blogs WHERE id = ?`, [posts[i].blogID]);
-      blog = blog[0];
+      let p = posts[i];
 
-      renderedPosts.push(`
-        <div id="${posts[i].id}" class="post" timestamp="${Date.parse(posts[i].created_at)}">
-          <div class="post-header"><a href="/blogs/view/${encodeURIComponent(blog.title)}">${blog.title}:</a></div>
-          <div class="markdown">
-            ${renderMarkdown(posts[i].content)}
-          </div>
-          <div class="interactions">
-            <div class="like-interaction">
-              ${posts[i].likeCount}
-              ${getLikeButton(posts[i].likedByBlog, posts[i].id)}
-            </div>
-            <div class="comment-interaction" >
-              ${posts[i].commentCount}
-              ${getCommentButton(posts[i].id)}
-            </div>
-          </div>
-          <div 
-            class="comment-section closed" 
-            id="comment-section-for-${posts[i].id}"
-          >
-            <div class="comments"
-              hx-trigger="load"
-              hx-get="/posts/api/comments?post=${posts[i].id}"
-              hx-swap="beforeend"
-              hx-target="this"
-            ></div>
-            <div class="comment-input">
-              <form hx-post="/posts/api/create/comment" hx-target="previous .comments" hx-swap="beforeend">
-                <input type="hidden" name="postID" value="${posts[i].id}">
-                <input type="hidden" name="replying" value="false">
-                <input type="hidden" name="commentID" value="null">
-                <label for="content">Comment: </label><input name="content" type="text" minlength="2" maxlength="1024">
-                <button type="submit">post</button>
-              </form>
-            </div>
-          </div>
-        </div>
-      `)
+      renderedPosts.push(renderPost(p.id, p.created_at, p.blogTitle, p.content, p.likedByBlog, p.likeCount, p.commentCount));
     }
 
 
@@ -164,6 +181,8 @@ router.post("/create/comment", async (req, res) => {
     return;
   }
 
+  console.log(req.body)
+
   if (req.body.content.length < 2 || req.body.content.length > 1024) {
     res.sendStatus(400);
     return;
@@ -174,6 +193,13 @@ router.post("/create/comment", async (req, res) => {
   try {
     if (req.body.replying == 'true') {
       //reply logic
+      console.log("Replying: ", req.body)
+      const [reply] = await database.query("INSERT INTO replies (content, commentID, blogID, atBlog) VALUES (?, ?, ?, ?)", [sanitizedContent, req.body.commentID, req.selectedBlog.id, req.body.atBlog])
+
+      res.send(`
+        <div hx-swap-oob="beforeend:#replies-for-${req.body.commentID}">
+          ${renderReply(sanitizedContent, req.selectedBlog.title, req.body.atBlog, reply.insertId)}
+        </div>`);
     } else {
       // comment logic
       const [comment] = await database.query("INSERT INTO comments (content, postID, blogID) VALUES (?, ?, ?)", [sanitizedContent, req.body.postID, req.selectedBlog.id]);
@@ -222,10 +248,7 @@ router.get("/comments", async (req, res) => {
     return;
   }
 
-  console.log("HIT");
-
   try {
-    console.log(req.query);
     const [comments] = await database.query(`
       SELECT comments.*,
       blogs.title AS blogTitle 
@@ -245,7 +268,32 @@ router.get("/comments", async (req, res) => {
   }
 })
 
-router.get("/comments/replies", (req, res) => {
+router.get("/comments/replies", async (req, res) => {
+  if (!req.authed || !req.selectedBlog) {
+    return;
+  }
+
+  console.log("getting replies", req.query)
+
+  try {
+    const [replies] = await database.query(`
+      SELECT replies.*,
+      blogs.title as blogTitle
+      FROM replies
+      LEFT JOIN blogs ON replies.blogID = blogs.id
+      WHERE replies.commentID = ?
+      GROUP BY replies.id`, [req.query.comment]);
+
+    const renderedReplies = replies.map((reply) => {
+      return renderReply(reply.content, reply.blogTitle, reply.atBlog, reply.id);
+    }).join("")
+
+    res.send(renderedReplies);
+  } catch (error) {
+    console.error(error)
+    res.sendStatus(500)
+  }
+
 })
 
 module.exports = router;
