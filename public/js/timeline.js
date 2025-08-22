@@ -79,6 +79,22 @@ function doubleReplyButtonClickEvent(e) {
   replyButtonClick(commentReplyButton, replier);
 }
 
+function stopReplying(e) {
+  e.target.classList.add("hidden");
+  const commentForm = e.target.parentNode;
+
+  for (let child of commentForm.children) {
+    if (child.name == "replying") {
+      child.value = 'false';
+    } else if (child.classList.contains("commenter-reply-name")) {
+      child.innerHTML = "";
+    }
+    console.log(child)
+  }
+
+  e.preventDefault();
+}
+
 document.addEventListener("htmx:afterRequest", (e) => {
   if (e.detail.target.getAttribute("id") == "posts") {
     // if it's targeting the posts container
@@ -107,6 +123,12 @@ document.addEventListener("htmx:afterRequest", (e) => {
 
     for (let i = 0; i < replyButtons.length; i++) {
       replyButtons[i].addEventListener("click", replyButtonClickEvent);
+    }
+
+    const stopReplyingButtons = document.getElementsByClassName("stop-replying-button");
+
+    for (let i = 0; i < stopReplyingButtons.length; i++) {
+      stopReplyingButtons[i].addEventListener("click", stopReplying);
     }
   } else if (e.detail.target.classList.contains("replies")) {
     const doubleReplyButtons = document.getElementsByClassName("double-reply-button");
