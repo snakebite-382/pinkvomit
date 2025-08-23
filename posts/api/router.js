@@ -2,7 +2,8 @@ const express = require("express");
 const router = express.Router();
 const insane = require("insane");
 const renderMarkdown = require("../../markdown.js");
-const database = require("../../database.js")
+const database = require("../../database.js");
+const { protect } = require("../../auth/middleware.js");
 
 const getLikeButton = (liked, postID) => {
   return `
@@ -102,17 +103,7 @@ const renderPost = (id, created_at, blogTitle, content, likedByBlog, likeCount, 
   </div>`;
 }
 
-router.post("/timeline", async (req, res) => {
-  if (!req.authed) {
-    res.status(401).send("UNAUTH");
-    return;
-  }
-
-  if (req.selectedBlog == null) {
-    res.send("<div class='error'>You need to create a blog before viewing your timeline</div>");
-    return;
-  }
-
+router.post("/timeline", protect(), async (req, res) => {
   try {
     let [followsIDs] = await database.query("SELECT followed_blogID FROM follows WHERE following_blogID = ?", [req.selectedBlog.id])
 
@@ -148,24 +139,18 @@ router.post("/timeline", async (req, res) => {
       renderedPosts.push(renderPost(p.id, p.created_at, p.blogTitle, p.content, p.likedByBlog, p.likeCount, p.commentCount));
     }
 
-
     res.send(renderedPosts.join(""))
   } catch (error) {
     console.error(error);
     res.send("<div id='timeline-result' class='error'>SERVER ERROR</div>")
   }
-})
+});
 
-router.post("/preview", (req, res) => {
+router.post("/preview", protect(), (req, res) => {
   res.send(`<div id='preview-result' class='markdown'> ${renderMarkdown(req.body.content)}</div>`)
-})
+});
 
-router.post("/create", async (req, res) => {
-  if (!req.authed) {
-    res.status(401).send("UNAUTH");
-    return;
-  }
-
+router.post("/create", protect(), async (req, res) => {
   try {
     await database.query("INSERT INTO posts (content, blogID) VALUES (?, ?)", [req.body.content, req.selectedBlog.id]);
     res.send("<div id='create-result' class='success'>Post Created!</div>")
@@ -175,14 +160,7 @@ router.post("/create", async (req, res) => {
   }
 });
 
-router.post("/create/comment", async (req, res) => {
-  if (!req.authed) {
-    res.status(401).send("UNAUTH");
-    return;
-  }
-
-  console.log(req.body)
-
+router.post("/create/comment", protect(), async (req, res) => {
   if (req.body.content.length < 2 || req.body.content.length > 1024) {
     res.sendStatus(400);
     return;
@@ -212,12 +190,7 @@ router.post("/create/comment", async (req, res) => {
   }
 });
 
-router.post("/like", async (req, res) => {
-  if (!req.authed || !req.selectedBlog) {
-    res.status(401).send("UNAUTH");
-    return;
-  }
-
+router.post("/like", protect(), async (req, res) => {
   try {
     let [postLiked] = await database.query("SELECT id FROM likes WHERE postID = ? AND blogID = ?", [req.body.post, req.selectedBlog.id]);
     let liked;
@@ -242,7 +215,7 @@ router.post("/like", async (req, res) => {
   }
 })
 
-router.get("/comments", async (req, res) => {
+router.get("/comments", protect(), async (req, res) => {
   if (!req.authed || !req.selectedBlog) {
     res.status(401).send("UNAUTH");
     return;
@@ -268,7 +241,7 @@ router.get("/comments", async (req, res) => {
   }
 })
 
-router.get("/comments/replies", async (req, res) => {
+router.get("/comments/replies", protect(), async (req, res) => {
   if (!req.authed || !req.selectedBlog) {
     return;
   }
@@ -293,9 +266,6 @@ router.get("/comments/replies", async (req, res) => {
     console.error(error)
     res.sendStatus(500)
   }
-
-})
+});
 
 module.exports = router;
-
-

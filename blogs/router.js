@@ -3,14 +3,15 @@ const router = express.Router();
 const render = require('../templating.js');
 const apiRouter = require('./api/router.js');
 const database = require("../database.js");
+const { protect } = require("../auth/middleware.js");
 
 router.use("/api", apiRouter)
 
-router.get("/manage", (req, res) => {
+router.get("/manage", protect(), (req, res) => {
   render(req, res, "blogs/manage", "MANAGE BLOGS")
 })
 
-router.get("/view/id/:id", async (req, res) => {
+router.get("/view/id/:id", protect(), async (req, res) => {
   let blogTitle;
   try {
     [blogTitle] = await database.query("SELECT title FROM blogs WHERE id = ?", [req.params.id]);
@@ -31,7 +32,7 @@ router.get("/view/id/:id", async (req, res) => {
   res.send("<div id='view-result' class='warning'>Redirecting...</div>")
 })
 
-router.get("/view/:title", async (req, res) => {
+router.get("/view/:title", protect(), async (req, res) => {
   let viewedBlog;
   let followsBlog;
 
@@ -59,7 +60,7 @@ router.get("/view/:title", async (req, res) => {
   render(req, res, "blogs/view", `VIEW ${req.query.title}`, vars)
 })
 
-router.get("/search", async (req, res) => {
+router.get("/search", protect(), async (req, res) => {
   render(req, res, "blogs/search", "SEARCH BLOGS")
 })
 

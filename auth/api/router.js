@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const database = require("../../database.js");
 const argon = require("argon2");
-const { login } = require("../middleware.js");
+const { login, protect } = require("../middleware.js");
 
 function validateEmail(email) {
   let parts = email.split("@");
@@ -138,12 +138,7 @@ router.post("/login", async (req, res) => {
   }
 });
 
-router.delete("/logout", async (req, res) => {
-  if (!req.authed) {
-    res.status(401).send("why?");
-    return;
-  }
-
+router.delete("/logout", protect(), async (req, res) => {
   res.set("HX-Redirect", "/")
 
   try {

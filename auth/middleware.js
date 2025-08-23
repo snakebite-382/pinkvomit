@@ -140,5 +140,36 @@ module.exports = {
     return [null, null, false];
   },
 
+  // returns a valid middleware function using the given options
+  // ownsBlog: checks if the user owns the blog, if id is present checks that, otherwise checks by title
+  protect: (getOption = () => { }) => {
+    return async (req, res, next) => {
+      console.log("MIDDLEWARE")
+      if (req.user == null || req.selectedBlog == null || !req.authed) {
+        res.sendStatus(401);
+        return;
+      }
+
+      const options = getOptions(req);
+
+      if ("ownsBlog" in options) {
+        let ownsBlog
+        if ("id" in options.ownsBlog) {
+          [ownsBlog] = await database.query("SELECT id FROM blogs WHERE id = ? AND userID = ?", [options.ownsBlog.id, req.user.id]);
+        } else {
+          [ownsBlog] = await database.query("SELECT title FROM blogs WHERE title = ? and userID = ?", [options.ownsBlog.title, req.user.id]);
+        }
+
+        if (ownsBlog.length === 0) {
+          res.sendStatus(401);
+          return;
+        }
+      }
+
+      // if all checks pass;
+      return next();
+    }
+  },
+
   getUserByEmail: getUserByEmail,
 }

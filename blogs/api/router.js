@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const database = require("../../database.js");
+const { protect } = require('../../auth/middleware.js');
 
 const validateTitle = async (title, userID) => {
   const validCharacters = "qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM1234567890-_*[]()^!.";
@@ -24,12 +25,7 @@ const validateTitle = async (title, userID) => {
   return [valid, invalidChars];
 }
 
-router.post("/validate/title", async (req, res) => {
-  if (!req.authed) {
-    res.status(401).send("UNAUTH");
-    return;
-  }
-
+router.post("/validate/title", protect(), async (req, res) => {
   try {
     const [valid, invalidChars] = await validateTitle(req.body.title, req.user.id)
     if (valid) {
@@ -47,13 +43,7 @@ router.post("/validate/title", async (req, res) => {
   }
 })
 
-router.post("/create", async (req, res) => {
-  if (!req.authed) {
-    res.status(401).send("UNAUTH");
-    return;
-  }
-
-
+router.post("/create", protect(), async (req, res) => {
   try {
     const [valid, _] = await validateTitle(req.body.title, req.user.id)
 
@@ -78,106 +68,91 @@ router.post("/create", async (req, res) => {
   }
 });
 
-router.put("/select", async (req, res) => {
-  if (!req.authed) {
-    res.status(401).send("UNAUTH")
-    return;
-  }
+router.put(
+  "/select",
+  protect((req) => ({ ownsBlog: { id: req.body.blog } })),
+  async (req, res) => {
+    res.set("HX-Refresh", true);
 
-  res.set("HX-Refresh", true);
+    try {
+      let [requestedBlog] = await database.query("SELECT id, userID FROM blogs WHERE id = ?", [req.body.blog]);
+      requestedBlog = requestedBlog[0]
 
-  try {
-    let [requestedBlog] = await database.query("SELECT id, userID FROM blogs WHERE id = ?", [req.body.blog]);
-    requestedBlog = requestedBlog[0]
+      if (requestedBlog.userID != req.user.id) {
+        res.status(401).send("UNAUTH");
+        return;
+      }
 
-    if (requestedBlog.userID != req.user.id) {
-      res.status(401).send("UNAUTH");
+      await database.query("UPDATE sessions SET selectedBlogID = ? WHERE uuid = ?", [requestedBlog.id, req.token.uuid]); // select new one
+
+      res.send("<div id='select-result' class='success'></div>");
       return;
+    } catch (error) {
+      console.error(error);
+      res.send("<div id='select-result' class='error'>SERVER ERROR</div>");
     }
-
-    await database.query("UPDATE sessions SET selectedBlogID = ? WHERE uuid = ?", [requestedBlog.id, req.token.uuid]); // select new one
-
-    res.send("<div id='select-result' class='success'></div>");
-    return;
-  } catch (error) {
-    console.error(error);
-    res.send("<div id='select-result' class='error'>SERVER ERROR</div>");
   }
-})
+);
 
-router.put("/select/main", async (req, res) => {
-  if (!req.authed) {
-    res.status(401).send("UNAUTH");
-    return;
-  }
-
-  res.set("HX-Refresh", true);
+router.put("/select/main",
+  protect((req) => ({ ownsBlog: { id: req.body.blog } })),
+  async (req, res) => {
+    res.set("HX-Refresh", true);
 
 
-  try {
-    let [requestedBlog] = await database.query("SELECT id, userID FROM blogs where id = ?", [req.body.blog]);
-    requestedBlog = requestedBlog[0];
+    try {
+      let [requestedBlog] = await database.query("SELECT id, userID FROM blogs where id = ?", [req.body.blog]);
+      requestedBlog = requestedBlog[0];
 
-    if (requestedBlog.userID != req.user.id) {
-      res.status(401).send("UNAUTH");
+      if (requestedBlog.userID != req.user.id) {
+        res.status(401).send("UNAUTH");
+        return;
+      }
+
+      await database.query("UPDATE users SET mainBlogID = ? WHERE id = ?", [requestedBlog.id, req.user.id]);
+      res.send("<div id='main-result' class='success'>Blog selected as main blog</div>")
       return;
+    } catch (error) {
+      console.error(error)
+      res.send("<div id='main-result' class='error'>SEVER ERROR</div>")
     }
-
-    await database.query("UPDATE users SET mainBlogID = ? WHERE id = ?", [requestedBlog.id, req.user.id]);
-    res.send("<div id='main-result' class='success'>Blog selected as main blog</div>")
-    return;
-  } catch (error) {
-    console.error(error)
-    res.send("<div id='main-result' class='error'>SEVER ERROR</div>")
   }
-})
+);
 
-router.post("/delete/:id", async (req, res) => {
-  if (!req.authed) {
-    res.status(401).send("UNAUTH");
-    return;
-  }
+router.post("/delete/:id",
+  protect((req) => ({ ownsBlog: { id: req.params.id } })),
+  async (req, res) => {
+    res.set("HX-Refresh", true)
 
-  res.set("HX-Refresh", true)
+    try {
+      let [ownsBlog] = await database.query("SELECT id FROM blogs WHERE id = ? AND userID = ?", [req.params.id, req.user.id])
+      let [mainBlog] = await database.query("SELECT mainBlogID FROM users WHERE id = ? AND mainBlogID = ?", [req.user.id, req.params.id]);
+      let [selectedBlog] = await database.query("SELECT selectedBlogID FROM sessions WHERE uuid = ? AND selectedBlogID = ?", [req.token.uuid, req.params.id])
 
-  try {
-    let [ownsBlog] = await database.query("SELECT id FROM blogs WHERE id = ? AND userID = ?", [req.params.id, req.user.id])
-    let [mainBlog] = await database.query("SELECT mainBlogID FROM users WHERE id = ? AND mainBlogID = ?", [req.user.id, req.params.id]);
-    let [selectedBlog] = await database.query("SELECT selectedBlogID FROM sessions WHERE uuid = ? AND selectedBlogID = ?", [req.token.uuid, req.params.id])
+      if (ownsBlog.length === 0) {
+        res.status(401).send("UNAUTH");
+        return;
+      }
 
-    if (ownsBlog.length === 0) {
-      res.status(401).send("UNAUTH");
-      return;
+      if (mainBlog.length !== 0) {
+        await database.query("UPDATE users SET mainBlogID = ? WHERE id = ?", [null, req.user.id])
+      }
+
+      if (selectedBlog.length !== 0) {
+        await database.query("UPDATE sessions SET selectedBlogID = ? WHERE uuid = ?", [null, req.token.uuid])
+      }
+
+      await database.query("DELETE FROM blogs WHERE id = ?", [req.params.id])
+
+      res.send("<div id='#delete-result' class='success'>Deleted!</div>")
+    } catch (error) {
+      console.error(error);
+      res.send("<div id='delete-result' class='error'> ")
     }
-
-    if (mainBlog.length !== 0) {
-      await database.query("UPDATE users SET mainBlogID = ? WHERE id = ?", [null, req.user.id])
-    }
-
-    if (selectedBlog.length !== 0) {
-      await database.query("UPDATE sessions SET selectedBlogID = ? WHERE uuid = ?", [null, req.token.uuid])
-    }
-
-    await database.query("DELETE FROM blogs WHERE id = ?", [req.params.id])
-
-    res.send("<div id='#delete-result' class='success'>Deleted!</div>")
-  } catch (error) {
-    console.error(error);
-    res.send("<div id='delete-result' class='error'> ")
   }
-})
+);
 
-router.post("/follow", async (req, res) => {
-  if (!req.authed) {
-    res.status(401).send("UNAUTH");
-    return;
-  }
-
-  if (req.selectedBlog == null) {
-    res.send("<div id='follow_result' class='error'>You need to make a blog before you can follow other blogs</div>");
-    return;
-  }
-
+router.post("/follow", protect(), async (req, res) => {
   try {
     const [ownsBlog] = await database.query("SELECT userID FROM blogs WHERE id = ? AND userID = ?", [req.query.blog, req.user.id]);
     const [followsBlog] = await database.query("SELECT followed_blogID FROM follows WHERE following_blogID = ? AND followed_blogID = ?", [req.selectedBlog.id, req.query.blog]);
@@ -202,9 +177,9 @@ router.post("/follow", async (req, res) => {
     res.send("<div id='follow-result' class='error'>SERVER ERROR</div>");
     return;
   }
-})
+});
 
-router.post("/search", async (req, res) => {
+router.post("/search", protect(), async (req, res) => {
   if (!req.authed) {
     res.status(401).send("UNAUTH");
     return
@@ -225,6 +200,6 @@ router.post("/search", async (req, res) => {
     res.send("<div id='search-result' class='error'>SERVER ERROR</div>")
   }
 
-})
+});
 
 module.exports = router;
