@@ -90,6 +90,24 @@ export function IsBlog(blog: object): blog is Blog {
   )
 }
 
+export interface Page extends DB_OBJECT {
+  title: string,
+  content: string,
+  blogID: ID
+}
+
+export function IsPage(page: object): page is Page {
+  return (
+    IsDBObject(page) &&
+    "title" in page &&
+    typeof page.title == "string" &&
+    "content" in page &&
+    typeof page.content == "string" &&
+    "blogID" in page &&
+    IsID(page.blogID)
+  )
+}
+
 export interface Post extends DB_OBJECT {
   content: string,
   blogID: ID,

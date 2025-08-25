@@ -1,7 +1,7 @@
 import express from 'express';
 const router = express.Router();
 import insane from 'insane';
-import renderMarkdown from '../../markdown';
+import { renderMarkdown, sanitizeMarkdown } from '../../markdown';
 import database from '../../database';
 import { protect } from '../../auth/middleware';
 import { Follow, IsAuthedRequest, Post, TimelineComment, TimelinePost, TimelineReply } from "types";
@@ -26,10 +26,10 @@ router.post("/timeline", protect(), async (req, res) => {
 
     let [posts] = await database.query(
       `SELECT posts.*,
-      COUNT(likes.id) as likeCount,
-      MAX(CASE WHEN likes.blogID = ? THEN 1 ELSE 0 END) AS likedByBlog,
-      COUNT(comments.id) as commentCount,
-      blogs.title as blogTitle
+        COUNT(likes.id) as likeCount,
+        MAX(CASE WHEN likes.blogID = ? THEN 1 ELSE 0 END) AS likedByBlog,
+        COUNT(comments.id) as commentCount,
+        blogs.title as blogTitle
       FROM posts 
       LEFT JOIN likes ON likes.postID = posts.id 
       LEFT JOIN comments ON comments.postID = posts.id
@@ -45,9 +45,7 @@ router.post("/timeline", protect(), async (req, res) => {
     let renderedPosts = [];
 
     for (let i = 0; i < posts.length; i++) {
-      let p = posts[i];
-
-      renderedPosts.push(renderPost(p.id, p.created_at, p.blogTitle, p.content, p.likedByBlog, p.likeCount, p.commentCount));
+      renderedPosts.push(renderPost(posts[i]));
     }
 
     res.send(renderedPosts.join(""))
@@ -57,8 +55,43 @@ router.post("/timeline", protect(), async (req, res) => {
   }
 });
 
+router.get("/blog/:title", protect(), async (req, res) => {
+  if (!IsAuthedRequest(req)) {
+    res.sendStatus(500);
+    return;
+  }
+
+  try {
+    let [posts] = await database.query(
+      `
+      SELECT posts.*,
+        COUNT(likes.id) as likeCount,
+        MAX(CASE WHEN likes.blogID = 'FirstBlog!' THEN 1 ELSE 0 END) as likedByBlog,
+        COUNT(comments.id) as commentCount,
+        blogs.title as blogTitle
+      FROM posts 
+      LEFT JOIN comments ON comments.postID = posts.id
+      LEFT JOIN likes ON likes.postID = posts.id
+      LEFT JOIN blogs ON blogs.id = posts.blogID
+      WHERE blogs.title = ?
+      GROUP BY posts.id
+      `, [req.params.title]) as [TimelinePost[], any]
+
+    let renderedPosts: string[] = [];
+
+    for (let i = 0; i < posts.length; i++) {
+      renderedPosts.push(renderPost(posts[i]))
+    }
+
+    res.send(renderedPosts.join(""));
+  } catch (error) {
+    console.error(error);
+    res.sendStatus(500)
+  }
+})
+
 router.post("/preview", protect(), (req, res) => {
-  res.send(`<div id='preview-result' class='markdown'> ${renderMarkdown(req.body.content)}</div>`)
+  res.send(`<div id='preview-result' class='markdown'> ${renderMarkdown(sanitizeMarkdown(req.body.content))}</div>`)
 });
 
 router.post("/create", protect(), async (req, res) => {

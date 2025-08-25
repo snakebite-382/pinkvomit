@@ -6,3 +6,29 @@
   padding-top: 10px;
   padding-bottom: 10px;
 }
+
+#create-page {
+  display: grid;
+  grid-template-areas: "input preview";
+  grid-template-columns: repeat(2, 50vw);
+  gap: 10px;
+  padding: 10px;
+  place-items: center;
+}
+
+#create-form {
+  grid-area: input;
+  width: 100%;
+  padding-left: 25px;
+}
+
+#create-form textarea {
+  width: 45vw;
+  height: 50vh;
+}
+
+#preview-result {
+  grid-area: preview;
+  max-width: 45vw;
+  width: 45vw;
+}

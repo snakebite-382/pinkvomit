@@ -2,7 +2,7 @@ import crypto from 'crypto'
 import argon from 'argon2';
 import signer from './jwt';
 import database from '../database';
-import { Blog, DecodedJWT, GetProtectOptions, Session, User } from '../types';
+import { Blog, DecodedJWT, GetProtectOptions, IsAuthedRequest, Session, User } from '../types';
 import { NextFunction, Request, Response } from 'express';
 
 export async function getUserByEmail(email: string): Promise<User> {
@@ -57,8 +57,9 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
 }
 
 export async function keepAlive(req: Request, res: Response, next: NextFunction) {
-  if (!req.authed) {
-    return next();
+  if (!IsAuthedRequest(req)) {
+    next();
+    return;
   }
 
   let decodedToken = signer.decode(req.cookies.sessionToken);
@@ -89,7 +90,7 @@ export async function keepAlive(req: Request, res: Response, next: NextFunction)
       await database.query("INSERT INTO sessions (uuid, userID, expiresAt, selectedBlogID) VALUES (?, ?, ?, ?)", [token.uuid, user.id, token.exp, selectedBlog[0].selectedBlogID])
     } catch (error) {
       console.error(error)
-      return next();
+      next();
     }
   }
 

@@ -1,5 +1,5 @@
-import { ID, DB_TIMESTAMP } from 'types';
-import renderMarkdown from '../markdown';
+import { ID, DB_TIMESTAMP, TimelinePost } from 'types';
+import { renderMarkdown } from '../markdown';
 
 export function renderLikeButton(liked: boolean, postID: ID) {
   return `
@@ -56,19 +56,20 @@ export function renderReply(content: string, blogTitle: string, atBlogTitle: str
   </div>`
 }
 
-export function renderPost(id: ID, created_at: DB_TIMESTAMP, blogTitle: string, content: string, likedByBlog: boolean, likeCount: number, commentCount: number) {
+export function renderPost(post: TimelinePost) {
+  let { id, created_at, blogTitle, content, likedByBlog, likeCount, commentCount } = post;
   return `
-  <div id="${id}" class="post" timestamp="${Date.parse(created_at.toISOString())}">
-    <div class="post-header"><a href="/blogs/view/${encodeURIComponent(blogTitle)}">${blogTitle}:</a></div>
-    <div class="markdown">
+  <div id="post-${id}" class="post" timestamp="${Date.parse(created_at.toISOString())}">
+    <div class="post-header" id="header-for-${id}"><a href="/blogs/view/${encodeURIComponent(blogTitle)}">${blogTitle}:</a></div>
+    <div class="markdown" id="markdown-for-${id}">
       ${renderMarkdown(content)}
     </div>
-    <div class="interactions">
-      <div class="like-interaction">
+    <div class="interactions" id="interactions-for-${id}">
+      <div class="like-interaction" id="like-interaction-for-${id}">
         ${likeCount}
         ${renderLikeButton(likedByBlog, id)}
       </div>
-      <div class="comment-interaction" >
+      <div class="comment-interaction" id="comment-interaction-for-${id}">
         ${commentCount}
         ${renderCommentButton(id)}
       </div>
@@ -82,8 +83,9 @@ export function renderPost(id: ID, created_at: DB_TIMESTAMP, blogTitle: string, 
         hx-get="/posts/api/comments?post=${id}"
         hx-swap="beforeend"
         hx-target="this"
+        id="comments-for-${id}"
       ></div>
-      <div class="comment-input">
+      <div class="comment-input" id="comment-input-for-${id}">
         <form hx-post="/posts/api/create/comment" hx-target="previous .comments" hx-swap="beforeend" id="comment-form-for-${id}">
           <input type="hidden" name="postID" value="${id}">
           <input type="hidden" name="replying" value="false">
@@ -97,4 +99,18 @@ export function renderPost(id: ID, created_at: DB_TIMESTAMP, blogTitle: string, 
       </div>
     </div>
   </div>`;
+}
+
+export function renderBlogsPosts(blogTitle: string) {
+  return `
+    <div 
+      class="posts"
+      id="posts-for-blog-${blogTitle}"
+      hx-trigger="load"
+      hx-get="/posts/api/blog/${blogTitle}"
+      hx-target="this"
+      hx-swap="beforeend"
+    >
+    </div>
+  `
 }

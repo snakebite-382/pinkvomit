@@ -1,29 +1,77 @@
 <!DOCTYPE html>
 <html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <%- include('../partials/head') %>
+    <link rel="stylesheet" href="/css/viewBlog.css" />
+    <link rel="stylesheet" href="/css/postStyles.css"
+  </head>
 
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <%- include('../partials/head') %>
-    <link rel="stylesheet" href="/css/viewBlog.css" </head>
+  <body>
+    <%- include('../partials/nav') %>
 
-<body>
-  <%- include('../partials/nav') %>
     <div id="container">
       <div id="header">
         <h1>
           <%= viewedBlog.title %>
         </h1>
+
         <% if (!followsBlog && !ownsBlog) { %>
-          <button hx-post=" /blogs/api/follow?blog=<%=viewedBlog.id %>" hx-target="#follow-result"
-            hx-swap="outerHTML">Follow</button>
-          <div id="follow-result"></div>
-          <% } else if (followsBlog) {%>
-            <h3>Following!</h3>
-            <% } %>
+        <button
+          hx-post="/blogs/api/follow?blog=<%= viewedBlog.id %>"
+          hx-target="#follow-result"
+          hx-swap="outerHTML"
+        >
+          Follow
+        </button>
+        <div id="follow-result"></div>
+
+        <% } else if (followsBlog) { %>
+        <h3>Following!</h3>
+        <% } %>
+
+        <% if (ownsBlog) { %>
+        <button id="open-create-page">Create Page</button>
+        <div id="create-page" class="hidden">
+          <div id="create-form">
+            <h3>Create Page</h3>
+            <form
+              id="create-page-form"
+              hx-post="/pages/api/create"
+              hx-target="#create-result"
+              hx-swap="outerHTML"
+            >
+              <input type="hidden" name="id" value="<%= viewedBlog.id %>" />
+              <input
+                type="hidden"
+                name="blogTitle"
+                value="<%= viewedBlog.title %>"
+              />
+              <label for="title">Title:</label><br />
+              <input type="text" name="title" id="title" /><br />
+              <label for="content">Content: </label><br />
+              <textarea
+                id="content"
+                name="content"
+                maxlength="8192"
+                hx-post="/pages/api/preview"
+                hx-trigger="input"
+                hx-target="#preview-result"
+                hx-swap="outerHTML"
+              ></textarea>
+            </form>
+            <div id="create-result"></div>
+          </div>
+          <div id="preview-result"></div>
+        </div>
+        <% } %>
+
+        <div id="blog-pages"></div>
       </div>
     </div>
-    <%- include('../partials/footer') %>
-</body>
 
+    <script src="/js/view.js"></script>
+    <%- include('../partials/footer') %>
+  </body>
 </html>

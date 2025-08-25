@@ -11,6 +11,7 @@ import render from './templating';
 import postsRouter from './posts/router';
 import authRouter from './auth/router';
 import blogsRouter from './blogs/router';
+import pagesRouter from "./pages/router";
 import { AuthedRequest } from 'types';
 import path from 'path';
 
@@ -29,9 +30,9 @@ app.use(express.static(path.join(__dirname, "public")));
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
-app.use(keepAlive);
 app.use(authenticate);
 app.use(fetchUser);
+app.use(keepAlive);
 
 // basic example of how to render a page using the homepage.
 // other pages should have their own router 
@@ -44,6 +45,8 @@ app.use('/auth', authRouter);
 app.use('/blogs', blogsRouter);
 
 app.use("/posts", postsRouter);
+
+app.use("/pages", pagesRouter)
 
 app.listen(port, () => {
   console.log(`listening on port ${port}`);

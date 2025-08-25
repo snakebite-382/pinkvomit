@@ -26,6 +26,7 @@
                     hx-swap="none">Select</button>
                   <button hx-put="/blogs/api/select/main" hx-vals='{"blog" : "<%= blogs[i].id %>" }'
                     hx-swap="none">Select Main</button>
+                  <a href="/blogs/view/<%= blogs[i].title %>">View</a>
           </li>
           <% } %>
       </ul>
