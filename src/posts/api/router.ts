@@ -4,106 +4,10 @@ import insane from 'insane';
 import renderMarkdown from '../../markdown';
 import database from '../../database';
 import { protect } from '../../auth/middleware';
-import { DB_TIMESTAMP, Follow, ID, IsAuthedRequest, Post, TimelineComment, TimelinePost, TimelineReply } from "types";
+import { Follow, IsAuthedRequest, Post, TimelineComment, TimelinePost, TimelineReply } from "types";
+import { renderLikeButton, renderCommentButton, renderPost, renderComment, renderReply } from '../render';
 import { ResultSetHeader } from 'mysql2';
 
-const renderLikeButton = (liked: boolean, postID: ID) => {
-  return `
-  <svg 
-    xmlns="http://www.w3.org/2000/svg" 
-    width="20" height="20" 
-    viewBox="0 0 24 24" 
-    fill="${liked ? "red" : "none"}" 
-    stroke="currentColor" 
-    stroke-width="2" stroke-linecap="round" stroke-linejoin="round" 
-    hx-swap="outerHTML" 
-    hx-target="closest .like-interaction"
-    hx-post="/posts/api/like" 
-    hx-vals='{ "post": "${postID}" }' 
-    class="feather feather-heart clickable like-button">
-      <path fill="inherit" d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
-  </svg>`
-}
-
-const renderCommentButton = (postID: ID) => {
-  return `
-  <svg 
-    xmlns="http://www.w3.org/2000/svg" 
-    width="24" height="24" viewBox="0 0 24 24" 
-    fill="none" 
-    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" 
-    class="feather feather-message-square clickable comment-button"
-    id="comment-button-for-${postID}">
-    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-  </svg>`
-}
-
-const renderComment = (content: string, blogTitle: string, commentID: ID) => {
-  return `
-  <div class="comment" id="comment-${commentID}">
-    <div class="commenter"><a href="/blogs/view/${blogTitle}">${blogTitle}</a></div>
-    <div class="comment-content">${content}</div>
-    <button class="reply-button" id="reply-button-for-${commentID}">reply</button>
-    <div class="replies" 
-      id="replies-for-${commentID}"
-      hx-trigger="load" 
-      hx-target="this"
-      hx-swap="beforeend"
-      hx-get="/posts/api/comments/replies?comment=${commentID}"></div>
-  </div>`
-}
-
-const renderReply = (content: string, blogTitle: string, atBlogTitle: string, replyID: ID) => {
-  return `
-  <div class="reply" id="reply-${replyID}">
-    <div class="replier"><a href="/blogs/view/${blogTitle}">${blogTitle}</a> : <a href="/blogs/view/${atBlogTitle}">@${atBlogTitle}</a></div>
-    <div class="reply-content">${content}</div>
-    <button class="double-reply-button" id="double-reply-button-for-${replyID}">reply</button>
-  </div>`
-}
-
-const renderPost = (id: ID, created_at: DB_TIMESTAMP, blogTitle: string, content: string, likedByBlog: boolean, likeCount: number, commentCount: number) => {
-  return `
-  <div id="${id}" class="post" timestamp="${Date.parse(created_at)}">
-    <div class="post-header"><a href="/blogs/view/${encodeURIComponent(blogTitle)}">${blogTitle}:</a></div>
-    <div class="markdown">
-      ${renderMarkdown(content)}
-    </div>
-    <div class="interactions">
-      <div class="like-interaction">
-        ${likeCount}
-        ${renderLikeButton(likedByBlog, id)}
-      </div>
-      <div class="comment-interaction" >
-        ${commentCount}
-        ${renderCommentButton(id)}
-      </div>
-    </div>
-    <div 
-      class="comment-section closed" 
-      id="comment-section-for-${id}"
-    >
-      <div class="comments"
-        hx-trigger="load"
-        hx-get="/posts/api/comments?post=${id}"
-        hx-swap="beforeend"
-        hx-target="this"
-      ></div>
-      <div class="comment-input">
-        <form hx-post="/posts/api/create/comment" hx-target="previous .comments" hx-swap="beforeend" id="comment-form-for-${id}">
-          <input type="hidden" name="postID" value="${id}">
-          <input type="hidden" name="replying" value="false">
-          <input type="hidden" name="commentID" value="null">
-          <input type="hidden" name="atBlog" value="null">
-          <label for="content">Comment: </label><input name="content" type="text" minlength="2" maxlength="1024">
-          <button type="submit">post</button>
-          <div id="commenter-reply-name-for-${id}" class="commenter-reply-name"></div>
-          <button id="stop-replying-for-${id}" class="hidden stop-replying-button" >stop replying</button>
-        </form>
-      </div>
-    </div>
-  </div>`;
-}
 
 router.post("/timeline", protect(), async (req, res) => {
   if (!IsAuthedRequest(req) || req.selectedBlog == null) {
