@@ -1,9 +1,12 @@
-const express = require('express');
+import express from 'express';
 const router = express.Router();
-const database = require("../../database.js");
-const { protect } = require('../../auth/middleware.js');
+import database from '../../database';
+import { protect } from "../../auth/middleware";
+import { Blog, Follow, ID, IsAuthedRequest, User } from 'types';
+import { ResultSetHeader } from 'mysql2';
+import { Session } from 'node:sqlite';
 
-const validateTitle = async (title, userID) => {
+const validateTitle = async (title: string, userID: ID): Promise<[boolean, string[]]> => {
   const validCharacters = "qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM1234567890-_*[]()^!.";
   let valid = true;
   let invalidChars = []
@@ -16,7 +19,7 @@ const validateTitle = async (title, userID) => {
     }
   }
 
-  const [rows] = await database.query("SELECT title FROM blogs WHERE title = ? and userID = ?", [title, userID]);
+  const [rows] = await database.query("SELECT title FROM blogs WHERE title = ? and userID = ?", [title, userID]) as [Blog[], any];
 
   if (rows.length !== 0) {
     valid = false;
@@ -25,9 +28,14 @@ const validateTitle = async (title, userID) => {
   return [valid, invalidChars];
 }
 
-router.post("/validate/title", protect(), async (req, res) => {
+router.post("/validate/title", protect((req) => ({ allowNoSelectedBlog: true })), async (req, res) => {
+  if (!IsAuthedRequest(req)) {
+    res.sendStatus(500);
+    return;
+  }
+
   try {
-    const [valid, invalidChars] = await validateTitle(req.body.title, req.user.id)
+    const [valid, invalidChars] = await validateTitle(req.body.title, req.user.id);
     if (valid) {
       res.send('')
     } else {
@@ -43,12 +51,16 @@ router.post("/validate/title", protect(), async (req, res) => {
   }
 })
 
-router.post("/create", protect(), async (req, res) => {
+router.post("/create", protect((req) => ({ allowNoSelectedBlog: true })), async (req, res) => {
+  if (!IsAuthedRequest(req)) {
+    res.sendStatus(500);
+    return;
+  }
   try {
     const [valid, _] = await validateTitle(req.body.title, req.user.id)
 
     if (valid) {
-      const [newBlog] = await database.query("INSERT INTO blogs (userID, title, stylesheet) VALUES (?, ?, ?)", [req.user.id, req.body.title, ""]);;
+      const [newBlog] = await database.query<ResultSetHeader>("INSERT INTO blogs (userID, title, stylesheet) VALUES (?, ?, ?)", [req.user.id, req.body.title, ""]);;
 
       await database.query("UPDATE sessions SET selectedBlogID = ? WHERE uuid = ?", [newBlog.insertId, req.token.uuid])
 
@@ -56,7 +68,7 @@ router.post("/create", protect(), async (req, res) => {
         await database.query("UPDATE users SET mainBlogID = ? WHERE id = ?", [newBlog.insertId, req.user.id]);
       }
 
-      res.set("HX-Refresh", true);
+      res.set("HX-Refresh", 'true');
 
       res.send("<div id='create-result' class='success'>Blog created successfully, refresh to view it</div>")
     } else {
@@ -72,11 +84,16 @@ router.put(
   "/select",
   protect((req) => ({ ownsBlog: { id: req.body.blog } })),
   async (req, res) => {
-    res.set("HX-Refresh", true);
+    if (!IsAuthedRequest(req)) {
+      res.sendStatus(500);
+      return;
+    }
+
+    res.set("HX-Refresh", 'true');
 
     try {
-      let [requestedBlog] = await database.query("SELECT id, userID FROM blogs WHERE id = ?", [req.body.blog]);
-      requestedBlog = requestedBlog[0]
+      let [requestedBlogs] = await database.query("SELECT id, userID FROM blogs WHERE id = ?", [req.body.blog]) as [Blog[], any];
+      let requestedBlog = requestedBlogs[0];
 
       if (requestedBlog.userID != req.user.id) {
         res.status(401).send("UNAUTH");
@@ -97,12 +114,16 @@ router.put(
 router.put("/select/main",
   protect((req) => ({ ownsBlog: { id: req.body.blog } })),
   async (req, res) => {
-    res.set("HX-Refresh", true);
+    if (!IsAuthedRequest(req)) {
+      res.sendStatus(500);
+      return;
+    }
 
+    res.set("HX-Refresh", 'true');
 
     try {
-      let [requestedBlog] = await database.query("SELECT id, userID FROM blogs where id = ?", [req.body.blog]);
-      requestedBlog = requestedBlog[0];
+      let [requestedBlogs] = await database.query("SELECT id, userID FROM blogs where id = ?", [req.body.blog]) as [Blog[], any];
+      let requestedBlog = requestedBlogs[0];
 
       if (requestedBlog.userID != req.user.id) {
         res.status(401).send("UNAUTH");
@@ -122,12 +143,17 @@ router.put("/select/main",
 router.post("/delete/:id",
   protect((req) => ({ ownsBlog: { id: req.params.id } })),
   async (req, res) => {
-    res.set("HX-Refresh", true)
+    if (!IsAuthedRequest(req)) {
+      res.sendStatus(500);
+      return;
+    }
+
+    res.set("HX-Refresh", 'true');
 
     try {
-      let [ownsBlog] = await database.query("SELECT id FROM blogs WHERE id = ? AND userID = ?", [req.params.id, req.user.id])
-      let [mainBlog] = await database.query("SELECT mainBlogID FROM users WHERE id = ? AND mainBlogID = ?", [req.user.id, req.params.id]);
-      let [selectedBlog] = await database.query("SELECT selectedBlogID FROM sessions WHERE uuid = ? AND selectedBlogID = ?", [req.token.uuid, req.params.id])
+      let [ownsBlog] = await database.query("SELECT id FROM blogs WHERE id = ? AND userID = ?", [req.params.id, req.user.id]) as [Blog[], any];
+      let [mainBlog] = await database.query("SELECT mainBlogID FROM users WHERE id = ? AND mainBlogID = ?", [req.user.id, req.params.id]) as [User[], any];
+      let [selectedBlog] = await database.query("SELECT selectedBlogID FROM sessions WHERE uuid = ? AND selectedBlogID = ?", [req.token.uuid, req.params.id]) as [Session[], any];
 
       if (ownsBlog.length === 0) {
         res.status(401).send("UNAUTH");
@@ -153,9 +179,14 @@ router.post("/delete/:id",
 );
 
 router.post("/follow", protect(), async (req, res) => {
+  if (!IsAuthedRequest(req) || req.selectedBlog == null) {
+    res.sendStatus(500);
+    return;
+  }
+
   try {
-    const [ownsBlog] = await database.query("SELECT userID FROM blogs WHERE id = ? AND userID = ?", [req.query.blog, req.user.id]);
-    const [followsBlog] = await database.query("SELECT followed_blogID FROM follows WHERE following_blogID = ? AND followed_blogID = ?", [req.selectedBlog.id, req.query.blog]);
+    const [ownsBlog] = await database.query("SELECT userID FROM blogs WHERE id = ? AND userID = ?", [req.query.blog, req.user.id]) as [Blog[], any];
+    const [followsBlog] = await database.query("SELECT followed_blogID FROM follows WHERE following_blogID = ? AND followed_blogID = ?", [req.selectedBlog.id, req.query.blog]) as [Follow[], any];
 
     if (ownsBlog.length !== 0) {
       res.send("<div id='follow-result' class='error'>You own this blog</div>");
@@ -167,7 +198,7 @@ router.post("/follow", protect(), async (req, res) => {
       return
     }
 
-    res.set("HX-Refresh", true);
+    res.set("HX-Refresh", 'true');
 
     await database.query("INSERT INTO follows (followed_blogID, following_blogID) VALUES (?, ?)", [req.query.blog, req.selectedBlog.id]);
 
@@ -186,13 +217,11 @@ router.post("/search", protect(), async (req, res) => {
   }
 
   try {
-    const [blogs] = await database.query("SELECT title FROM blogs WHERE MATCH(title) AGAINST (? IN NATURAL LANGUAGE MODE)", [req.body.search]);
+    const [blogs] = await database.query("SELECT title FROM blogs WHERE MATCH(title) AGAINST (? IN NATURAL LANGUAGE MODE)", [req.body.search]) as [Blog[], any];
 
     const renderedBlogs = blogs.map((blog) => {
       return `<div class='search-result'><a href='/blogs/view/${encodeURIComponent(blog.title)}'>${blog.title}</a></div>`
     }).join("");
-
-    console.log(renderedBlogs)
 
     res.send(renderedBlogs);
   } catch (error) {
@@ -202,4 +231,5 @@ router.post("/search", protect(), async (req, res) => {
 
 });
 
-module.exports = router;
+export default router;
+

@@ -1,10 +1,11 @@
-const express = require("express");
+import express from 'express';
 const router = express.Router();
-const database = require("../../database.js");
-const argon = require("argon2");
-const { login, protect } = require("../middleware.js");
+import database from '../../database'
+import argon from 'argon2'
+import { login, protect } from '../middleware';
+import { User, IsAuthedRequest } from '../../types';
 
-function validateEmail(email) {
+function validateEmail(email: string) {
   let parts = email.split("@");
 
   if (email.includes(" ")) return false;
@@ -20,10 +21,11 @@ function validateEmail(email) {
   return true;
 }
 
-function validatePassword(password) {
+
+function validatePassword(password: string) {
   if (password.length < 10) return false
-  const numbers = "1234567890";
-  const capitals = "QWERTYUIOPASDFGHJKLZXCVBNM";
+  const numbers: any = "1234567890";
+  const capitals: any = "QWERTYUIOPASDFGHJKLZXCVBNM";
 
   let containsNumber = false
 
@@ -44,13 +46,15 @@ function validatePassword(password) {
 router.post("/validate/email", async (req, res) => {
   if (validateEmail(req.body.email)) {
     try {
-      let [rows] = await database.query("SELECT email FROM users WHERE email = ?", [req.body.email]);
+      let [rows] = await database.query("SELECT email FROM users WHERE email = ?", [req.body.email]) as [User[], any];
       if (rows.length !== 0) {
         res.send("<div id='email-result' class='error'>Email already in use</div>");
       } else {
         res.send("<div id='email-result' class='success'></div>")
       }
     } catch (err) {
+      console.error(err);
+      res.send("<div id='email-result' class='error'>SERVER ERROR</div>");
     }
   } else {
     res.send("<div id='email-result' class='error'>Please use a valid email</div>")
@@ -76,13 +80,13 @@ router.post("/signup", async (req, res) => {
     try {
       const hashedPassword = await argon.hash(password);
       const invalidInputsError = "<div id='signup-result' class='error'>Some inputs are invalid</div>"
-      let [rows] = await database.query("SELECT email FROM users WHERE email = ?", [email]);
+      let [rows] = await database.query("SELECT email FROM users WHERE email = ?", [email]) as [User[], any];
       if (rows.length !== 0) {
         res.send(invalidInputsError);
         return
       }
 
-      [rows] = await database.query("INSERT INTO users (email, emailVerified, password) VALUES (?, false, ?)", [email, hashedPassword])
+      [rows] = await database.query("INSERT INTO users (email, emailVerified, password) VALUES (?, false, ?)", [email, hashedPassword]) as [User[], any]
 
       let [signedToken, _] = await login(email, password);
 
@@ -114,10 +118,10 @@ router.post("/login", async (req, res) => {
 
   const { email, password } = req.body;
 
-  let signedToken, loggedIn
+  let signedToken, loggedIn, decodedToken
 
   try {
-    [signedToken, _, loggedIn] = await login(email, password);
+    [signedToken, decodedToken, loggedIn] = await login(email, password);
   } catch (err) {
     console.error(err)
     res.send("<div id='login-result' class='error'>SERVER ERROR</div>");
@@ -138,7 +142,11 @@ router.post("/login", async (req, res) => {
   }
 });
 
-router.delete("/logout", protect(), async (req, res) => {
+router.delete("/logout", protect((req) => ({ allowNoSelectedBlog: true })), async (req, res) => {
+  if (!IsAuthedRequest(req)) {
+    res.sendStatus(500);
+    return
+  }
   res.set("HX-Redirect", "/")
 
   try {
@@ -151,4 +159,4 @@ router.delete("/logout", protect(), async (req, res) => {
   res.sendStatus(200);
 })
 
-module.exports = router;
+export default router

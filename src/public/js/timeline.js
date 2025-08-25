@@ -89,7 +89,6 @@ function stopReplying(e) {
     } else if (child.classList.contains("commenter-reply-name")) {
       child.innerHTML = "";
     }
-    console.log(child)
   }
 
   e.preventDefault();

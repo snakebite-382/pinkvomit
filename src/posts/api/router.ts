@@ -1,11 +1,13 @@
-const express = require("express");
+import express from 'express';
 const router = express.Router();
-const insane = require("insane");
-const renderMarkdown = require("../../markdown.js");
-const database = require("../../database.js");
-const { protect } = require("../../auth/middleware.js");
+import insane from 'insane';
+import renderMarkdown from '../../markdown';
+import database from '../../database';
+import { protect } from '../../auth/middleware';
+import { DB_TIMESTAMP, Follow, ID, IsAuthedRequest, Post, TimelineComment, TimelinePost, TimelineReply } from "types";
+import { ResultSetHeader } from 'mysql2';
 
-const getLikeButton = (liked, postID) => {
+const renderLikeButton = (liked: boolean, postID: ID) => {
   return `
   <svg 
     xmlns="http://www.w3.org/2000/svg" 
@@ -23,7 +25,7 @@ const getLikeButton = (liked, postID) => {
   </svg>`
 }
 
-const getCommentButton = (postID) => {
+const renderCommentButton = (postID: ID) => {
   return `
   <svg 
     xmlns="http://www.w3.org/2000/svg" 
@@ -36,7 +38,7 @@ const getCommentButton = (postID) => {
   </svg>`
 }
 
-const renderComment = (content, blogTitle, commentID) => {
+const renderComment = (content: string, blogTitle: string, commentID: ID) => {
   return `
   <div class="comment" id="comment-${commentID}">
     <div class="commenter"><a href="/blogs/view/${blogTitle}">${blogTitle}</a></div>
@@ -51,7 +53,7 @@ const renderComment = (content, blogTitle, commentID) => {
   </div>`
 }
 
-const renderReply = (content, blogTitle, atBlogTitle, replyID) => {
+const renderReply = (content: string, blogTitle: string, atBlogTitle: string, replyID: ID) => {
   return `
   <div class="reply" id="reply-${replyID}">
     <div class="replier"><a href="/blogs/view/${blogTitle}">${blogTitle}</a> : <a href="/blogs/view/${atBlogTitle}">@${atBlogTitle}</a></div>
@@ -60,7 +62,7 @@ const renderReply = (content, blogTitle, atBlogTitle, replyID) => {
   </div>`
 }
 
-const renderPost = (id, created_at, blogTitle, content, likedByBlog, likeCount, commentCount) => {
+const renderPost = (id: ID, created_at: DB_TIMESTAMP, blogTitle: string, content: string, likedByBlog: boolean, likeCount: number, commentCount: number) => {
   return `
   <div id="${id}" class="post" timestamp="${Date.parse(created_at)}">
     <div class="post-header"><a href="/blogs/view/${encodeURIComponent(blogTitle)}">${blogTitle}:</a></div>
@@ -70,11 +72,11 @@ const renderPost = (id, created_at, blogTitle, content, likedByBlog, likeCount, 
     <div class="interactions">
       <div class="like-interaction">
         ${likeCount}
-        ${getLikeButton(likedByBlog, id)}
+        ${renderLikeButton(likedByBlog, id)}
       </div>
       <div class="comment-interaction" >
         ${commentCount}
-        ${getCommentButton(id)}
+        ${renderCommentButton(id)}
       </div>
     </div>
     <div 
@@ -104,10 +106,15 @@ const renderPost = (id, created_at, blogTitle, content, likedByBlog, likeCount, 
 }
 
 router.post("/timeline", protect(), async (req, res) => {
-  try {
-    let [followsIDs] = await database.query("SELECT followed_blogID FROM follows WHERE following_blogID = ?", [req.selectedBlog.id])
+  if (!IsAuthedRequest(req) || req.selectedBlog == null) {
+    res.sendStatus(500);
+    return;
+  }
 
-    followsIDs = followsIDs.map((value) => value.followed_blogID);
+  try {
+    let [followsIDQuery] = await database.query("SELECT followed_blogID FROM follows WHERE following_blogID = ?", [req.selectedBlog.id]) as [Follow[], any];
+
+    let followsIDs = followsIDQuery.map((value) => value.followed_blogID);
 
     let ids = [req.selectedBlog.id, ...followsIDs];
 
@@ -129,7 +136,7 @@ router.post("/timeline", protect(), async (req, res) => {
       ORDER BY posts.created_at DESC 
       LIMIT 20`,
       [req.selectedBlog.id, req.query.before, ...ids]
-    );
+    ) as [TimelinePost[], any];
 
     let renderedPosts = [];
 
@@ -151,6 +158,11 @@ router.post("/preview", protect(), (req, res) => {
 });
 
 router.post("/create", protect(), async (req, res) => {
+  if (!IsAuthedRequest(req) || req.selectedBlog == null) {
+    res.sendStatus(500);
+    return;
+  }
+
   try {
     await database.query("INSERT INTO posts (content, blogID) VALUES (?, ?)", [req.body.content, req.selectedBlog.id]);
     res.send("<div id='create-result' class='success'>Post Created!</div>")
@@ -161,6 +173,11 @@ router.post("/create", protect(), async (req, res) => {
 });
 
 router.post("/create/comment", protect(), async (req, res) => {
+  if (!IsAuthedRequest(req) || req.selectedBlog == null) {
+    res.sendStatus(500);
+    return;
+  }
+
   if (req.body.content.length < 2 || req.body.content.length > 1024) {
     res.sendStatus(400);
     return;
@@ -171,8 +188,7 @@ router.post("/create/comment", protect(), async (req, res) => {
   try {
     if (req.body.replying == 'true') {
       //reply logic
-      console.log("Replying: ", req.body)
-      const [reply] = await database.query("INSERT INTO replies (content, commentID, blogID, atBlog) VALUES (?, ?, ?, ?)", [sanitizedContent, req.body.commentID, req.selectedBlog.id, req.body.atBlog])
+      const [reply] = await database.query<ResultSetHeader>("INSERT INTO replies (content, commentID, blogID, atBlog) VALUES (?, ?, ?, ?)", [sanitizedContent, req.body.commentID, req.selectedBlog.id, req.body.atBlog])
 
       res.send(`
         <div hx-swap-oob="beforeend:#replies-for-${req.body.commentID}">
@@ -180,7 +196,7 @@ router.post("/create/comment", protect(), async (req, res) => {
         </div>`);
     } else {
       // comment logic
-      const [comment] = await database.query("INSERT INTO comments (content, postID, blogID) VALUES (?, ?, ?)", [sanitizedContent, req.body.postID, req.selectedBlog.id]);
+      const [comment] = await database.query<ResultSetHeader>("INSERT INTO comments (content, postID, blogID) VALUES (?, ?, ?)", [sanitizedContent, req.body.postID, req.selectedBlog.id]);
 
       res.send(renderComment(sanitizedContent, req.selectedBlog.title, comment.insertId));
     }
@@ -191,8 +207,13 @@ router.post("/create/comment", protect(), async (req, res) => {
 });
 
 router.post("/like", protect(), async (req, res) => {
+  if (!IsAuthedRequest(req) || req.selectedBlog == null) {
+    res.sendStatus(500);
+    return;
+  }
+
   try {
-    let [postLiked] = await database.query("SELECT id FROM likes WHERE postID = ? AND blogID = ?", [req.body.post, req.selectedBlog.id]);
+    let [postLiked] = await database.query("SELECT id FROM likes WHERE postID = ? AND blogID = ?", [req.body.post, req.selectedBlog.id]) as [Post[], any];
     let liked;
 
     if (postLiked.length === 0) {
@@ -203,11 +224,11 @@ router.post("/like", protect(), async (req, res) => {
       await database.query("DELETE FROM likes WHERE id = ?", [postLiked[0].id]);
     }
 
-    let [updatedLikeCount] = await database.query("SELECT COUNT(id) AS likeCount FROM likes WHERE postID = ?", [req.body.post]);
+    let [updatedLikeCount] = await database.query("SELECT COUNT(id) AS likeCount FROM likes WHERE postID = ?", [req.body.post]) as [[{ likeCount: number }], any];
 
     res.send(`<div class="like-interaction">
       ${updatedLikeCount[0].likeCount}
-      ${getLikeButton(liked, req.body.post)}
+      ${renderLikeButton(liked, req.body.post)}
     </div>`)
   } catch (error) {
     console.error(error);
@@ -228,7 +249,7 @@ router.get("/comments", protect(), async (req, res) => {
       FROM comments 
       LEFT JOIN blogs ON comments.blogID = blogs.id
       WHERE comments.postID = ?
-      GROUP BY comments.id`, [req.query.post])
+      GROUP BY comments.id`, [req.query.post]) as [TimelineComment[], any];
     const renderedComments = comments.map((comment) => {
       return renderComment(comment.content, comment.blogTitle, comment.id)
     }).join("");
@@ -242,12 +263,6 @@ router.get("/comments", protect(), async (req, res) => {
 })
 
 router.get("/comments/replies", protect(), async (req, res) => {
-  if (!req.authed || !req.selectedBlog) {
-    return;
-  }
-
-  console.log("getting replies", req.query)
-
   try {
     const [replies] = await database.query(`
       SELECT replies.*,
@@ -255,7 +270,7 @@ router.get("/comments/replies", protect(), async (req, res) => {
       FROM replies
       LEFT JOIN blogs ON replies.blogID = blogs.id
       WHERE replies.commentID = ?
-      GROUP BY replies.id`, [req.query.comment]);
+      GROUP BY replies.id`, [req.query.comment]) as [TimelineReply[], any];
 
     const renderedReplies = replies.map((reply) => {
       return renderReply(reply.content, reply.blogTitle, reply.atBlog, reply.id);
@@ -268,4 +283,5 @@ router.get("/comments/replies", protect(), async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;
+
