@@ -1,27 +1,39 @@
 <!DOCTYPE html>
 <html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <%- include('../partials/head') %>
+    <link rel="stylesheet" href="/css/postStyles.css" />
+  </head>
 
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <%- include('../partials/head') %>
-    <link rel="stylesheet" href="/css/postStyles.css">
-</head>
-
-<body>
-  <%- include('../partials/nav') %>
+  <body>
+    <%- include('../partials/nav') %>
     <h1>Timeline</h1>
 
-    <div id="posts" hx-trigger="load" hx-target="this" hx-swap="beforeend"
-      hx-post="/posts/api/timeline?before=<%= Date.now() %>"></div>
+    <div
+      id="posts"
+      hx-trigger="load"
+      hx-target="this"
+      hx-swap="beforeend"
+      hx-post="/posts/api/timeline?before=<%= Date.now() %>"
+    ></div>
 
     <div class="center-col">
-      <button id="load-more" hx-target="#posts" hx-swap="beforeend" hx-trigger="click" disabled>load more</button>
+      <button
+        id="load-more"
+        hx-target="#posts"
+        hx-swap="beforeend"
+        hx-trigger="click"
+        disabled
+      >
+        load more
+      </button>
       <div id="load-more-error" class="error"></div>
     </div>
 
+    <script src="/js/commentSection.js"></script>
     <script src="/js/timeline.js"></script>
     <%- include('../partials/footer') %>
-</body>
-
+  </body>
 </html>

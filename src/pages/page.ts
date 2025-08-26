@@ -136,22 +136,37 @@ function parseTag(content: string, errors: string[], line: number): [string, str
     addError(errors, "Malformed Tag, no closing parenthesis", -1);
   }
 
-  return [tagName, params]
+  params = params.map(param => param.trim());
+
+  return [tagName.trim(), params]
 }
 
-export async function renderPage(content: string, blogTitle: string, presanitized: boolean = true): Promise<[string, string[]]> {
+interface RenderRules {
+  postsRendered: boolean,
+  pagesRendered: string[],
+  currentPageLength: number,
+}
+
+const maxPageLength = 16384;
+
+export async function renderPage(
+  content: string,
+  blogTitle: string,
+  presanitized: boolean = true,
+  rules: RenderRules = {
+    postsRendered: false,
+    pagesRendered: [],
+    currentPageLength: 0,
+  }): Promise<[string, string[]]> {
   if (!presanitized) {
     content = sanitizeMarkdown(content);
   }
 
   const renderedMarkdown = renderMarkdown(content);
   const [tokens, errors] = tokenizeMarkdown(renderedMarkdown);
-  let pageLength = renderedMarkdown.length;
-  const maxPageLength = 16384;
+  rules.currentPageLength = renderedMarkdown.length;
 
   let output = ""
-
-  console.log(tokens)
 
   for (let i = 0; i < tokens.length; i++) {
     let [tokenContent, isTag, line] = tokens[i];
@@ -161,7 +176,12 @@ export async function renderPage(content: string, blogTitle: string, presanitize
 
       switch (tagName) {
         case "posts":
-          output += renderBlogsPosts(blogTitle);
+          if (rules.postsRendered) {
+            addError(errors, "Cannot render posts more than once", line);
+          } else {
+            output += renderBlogsPosts(blogTitle, params.includes("minimal"));
+            rules.postsRendered = true;
+          }
           break;
         default:
           addError(errors, `Unkown Tag, ${tagName}`, line)

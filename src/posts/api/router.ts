@@ -26,7 +26,7 @@ router.post("/timeline", protect(), async (req, res) => {
 
     let [posts] = await database.query(
       `SELECT posts.*,
-        COUNT(likes.id) as likeCount,
+        COUNT(DISTINCT likes.id) as likeCount,
         MAX(CASE WHEN likes.blogID = ? THEN 1 ELSE 0 END) AS likedByBlog,
         COUNT(comments.id) as commentCount,
         blogs.title as blogTitle
@@ -63,24 +63,25 @@ router.get("/blog/:title", protect(), async (req, res) => {
 
   try {
     let [posts] = await database.query(
-      `
-      SELECT posts.*,
-        COUNT(likes.id) as likeCount,
-        MAX(CASE WHEN likes.blogID = 'FirstBlog!' THEN 1 ELSE 0 END) as likedByBlog,
-        COUNT(comments.id) as commentCount,
-        blogs.title as blogTitle
-      FROM posts 
+      `SELECT 
+        posts.*,
+        COUNT(DISTINCT likes.id) AS likeCount,
+        MAX(CASE WHEN likes.blogID = blogs.id THEN 1 ELSE 0 END) AS likedByBlog,
+        COUNT(DISTINCT comments.id) AS commentCount,
+        blogs.title AS blogTitle
+      FROM posts
       LEFT JOIN comments ON comments.postID = posts.id
       LEFT JOIN likes ON likes.postID = posts.id
-      LEFT JOIN blogs ON blogs.id = posts.blogID
+      JOIN blogs ON blogs.id = posts.blogID
       WHERE blogs.title = ?
       GROUP BY posts.id
-      `, [req.params.title]) as [TimelinePost[], any]
+      ORDER BY posts.created_at DESC
+    `, [req.params.title, req.params.title]) as [TimelinePost[], any]
 
     let renderedPosts: string[] = [];
 
     for (let i = 0; i < posts.length; i++) {
-      renderedPosts.push(renderPost(posts[i]))
+      renderedPosts.push(renderPost(posts[i], req.query.minimal === "true"))
     }
 
     res.send(renderedPosts.join(""));
@@ -125,17 +126,37 @@ router.post("/create/comment", protect(), async (req, res) => {
   try {
     if (req.body.replying == 'true') {
       //reply logic
-      const [reply] = await database.query<ResultSetHeader>("INSERT INTO replies (content, commentID, blogID, atBlog) VALUES (?, ?, ?, ?)", [sanitizedContent, req.body.commentID, req.selectedBlog.id, req.body.atBlog])
+      const [replyInsert] = await database.query<ResultSetHeader>("INSERT INTO replies (content, commentID, blogID, atBlog) VALUES (?, ?, ?, ?)", [sanitizedContent, req.body.commentID, req.selectedBlog.id, req.body.atBlog])
+      const reply: TimelineReply = {
+        content: sanitizedContent,
+        blogTitle: req.selectedBlog.title,
+        atBlog: req.body.atBlog,
+        id: replyInsert.insertId,
+        created_at: new Date(),
+        updated_at: new Date(),
+        commentID: req.body.commentID,
+        blogID: req.selectedBlog.id
+      }
+
 
       res.send(`
-        <div hx-swap-oob="beforeend:#replies-for-${req.body.commentID}">
-          ${renderReply(sanitizedContent, req.selectedBlog.title, req.body.atBlog, reply.insertId)}
+        <div hx-swap-oob="beforeend:#comment-replies-for-${req.body.commentID}">
+          ${renderReply(reply)}
         </div>`);
     } else {
       // comment logic
-      const [comment] = await database.query<ResultSetHeader>("INSERT INTO comments (content, postID, blogID) VALUES (?, ?, ?)", [sanitizedContent, req.body.postID, req.selectedBlog.id]);
+      const [commentInsert] = await database.query<ResultSetHeader>("INSERT INTO comments (content, postID, blogID) VALUES (?, ?, ?)", [sanitizedContent, req.body.postID, req.selectedBlog.id]);
+      const comment: TimelineComment = {
+        id: commentInsert.insertId,
+        content: sanitizedContent,
+        blogID: req.selectedBlog.id,
+        blogTitle: req.selectedBlog.title,
+        postID: req.body.postID,
+        created_at: new Date(),
+        updated_at: new Date(),
+      }
 
-      res.send(renderComment(sanitizedContent, req.selectedBlog.title, comment.insertId));
+      res.send(renderComment(comment));
     }
   } catch (error) {
     console.error(error);
@@ -188,7 +209,7 @@ router.get("/comments", protect(), async (req, res) => {
       WHERE comments.postID = ?
       GROUP BY comments.id`, [req.query.post]) as [TimelineComment[], any];
     const renderedComments = comments.map((comment) => {
-      return renderComment(comment.content, comment.blogTitle, comment.id)
+      return renderComment(comment)
     }).join("");
 
     res.send(renderedComments);
@@ -210,7 +231,7 @@ router.get("/comments/replies", protect(), async (req, res) => {
       GROUP BY replies.id`, [req.query.comment]) as [TimelineReply[], any];
 
     const renderedReplies = replies.map((reply) => {
-      return renderReply(reply.content, reply.blogTitle, reply.atBlog, reply.id);
+      return renderReply(reply);
     }).join("")
 
     res.send(renderedReplies);

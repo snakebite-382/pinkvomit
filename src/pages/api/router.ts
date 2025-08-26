@@ -4,9 +4,7 @@ import { renderPage } from "../page";
 const router = express.Router();
 
 router.post("/preview", protect(), async (req, res) => {
-  console.log(req.body)
   const [output, errors] = await renderPage(req.body.content, req.body.blogTitle, false);
-  console.log(`Errors: ${errors}`)
   res.send(`
     <div id="preview-result">
       ${output}
