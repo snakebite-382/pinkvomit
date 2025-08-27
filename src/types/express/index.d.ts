@@ -8,6 +8,9 @@ declare global {
       authed?: boolean,
       blogs?: Blog[],
       selectedBlog?: Blog | null
-    }
+    };
+    interface Locals {
+      nonce: string
+    };
   }
 }

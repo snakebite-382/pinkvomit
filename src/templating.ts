@@ -6,7 +6,16 @@ export default function render(
   res: Response,
   name: string,
   title: string,
-  vars: { authed?: boolean, token?: DecodedJWT | null, user?: User | null, blogs?: Blog[] | null, selectedBlog?: Blog | null, title?: string, [k: string]: any } = {}
+  vars: {
+    authed?: boolean,
+    token?: DecodedJWT | null,
+    user?: User | null,
+    blogs?: Blog[] | null,
+    selectedBlog?: Blog | null,
+    title?: string,
+    nonce?: string
+    [k: string]: any
+  } = {}
 ) {
   vars.authed = req.authed;
   vars.token = req.token;
@@ -14,5 +23,6 @@ export default function render(
   vars.blogs = req.blogs;
   vars.selectedBlog = req.selectedBlog;
   vars.title = title.toUpperCase();
+  vars.nonce = res.locals.nonce;
   return res.render(name, vars);
 }

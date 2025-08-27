@@ -2,8 +2,10 @@
 // the only things in this file should be setting up and running the server
 import dotenv from 'dotenv';
 dotenv.config();
-import express from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import cookieParser from 'cookie-parser';
+import { rateLimit } from 'express-rate-limit';
+import helmet from 'helmet';
 
 import { keepAlive, authenticate, fetchUser } from './auth/middleware';
 import render from './templating';
@@ -14,11 +16,45 @@ import blogsRouter from './blogs/router';
 import pagesRouter from "./pages/router";
 import { AuthedRequest } from 'types';
 import path from 'path';
+import crypto from 'crypto'
 
 const app = express();
 const port = 3000;
 
 app.use(cookieParser());
+app.use(rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 200,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  ipv6Subnet: 56
+}));
+
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      useDefaults: true,
+      directives: {
+        "script-src": [
+          "'self'",
+          "https://cdn.jsdelivr.net",
+        ],
+        "connect-src": ["'self'"]
+      },
+    },
+  })
+);
+
+// If you need access to the nonce in your templates, 
+// you can extract it from the CSP header
+app.use((req: Request, res: Response, next: NextFunction) => {
+  const cspHeader = res.getHeader('Content-Security-Policy') as string;
+  const nonceMatch = cspHeader?.match(/'nonce-([^']+)'/);
+  if (nonceMatch) {
+    res.locals.nonce = nonceMatch[1];
+  }
+  next();
+});
 
 app.use(express.json({
   type: ['application/json', 'text/json']
