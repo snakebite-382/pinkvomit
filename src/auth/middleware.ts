@@ -19,6 +19,8 @@ export function getSessionCookieSettings() {
   return {
     maxAge: 2 * 60 * 60 * 1000,
     sameSite: true,
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production'
   }
 }
 
