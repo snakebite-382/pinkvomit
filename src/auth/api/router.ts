@@ -29,13 +29,13 @@ function validatePassword(password: string) {
 
   let containsNumber = false
 
-  for (let number in numbers) {
-    if (password.includes(number)) containsNumber = true
+  for (let char of numbers) {
+    if (password.includes(char)) containsNumber = true
   }
 
   let containsCapital = false
 
-  for (let capital in capitals) {
+  for (let capital of capitals) {
     if (password.includes(capital)) containsCapital = true
   }
 
