@@ -3,25 +3,25 @@ function getLastEl(array) {
 }
 
 function commentButtonClick(e) {
-  const postID = getLastEl(e.target.id.split("-"));
-  const commentSection = document.getElementById(`post-comment-section-for-${postID}`);
+  const postID = getLastEl(e.target.id.split("_"));
+  const commentSection = document.getElementById(`post-comment-section-for_${postID}`);
   commentSection.classList.toggle("closed");
 }
 
 function replyButtonClick(element, commenterOveride = "") {
-  const commentID = getLastEl(element.id.split("-"));
+  const commentID = getLastEl(element.id.split("_"));
   let commenter;
 
   if (commenterOveride.length === 0) {
-    commenter = document.getElementById(`comment-blog-title-for-${commentID}`).innerHTML;
+    commenter = document.getElementById(`comment-blog-title-for_${commentID}`).innerHTML;
   } else {
     commenter = commenterOveride;
   }
 
-  const comment = document.getElementById(`comment-${commentID}`)
+  const comment = document.getElementById(`comment:${commentID}`)
   const commentSection = comment.parentElement;
-  const postID = getLastEl(commentSection.id.split("-"));
-  const commentForm = document.getElementById(`comment-form-for-${postID}`);
+  const postID = getLastEl(commentSection.id.split("_"));
+  const commentForm = document.getElementById(`comment-form-for_${postID}`);
 
   for (let child of commentForm.children) {
     if (child.name == "replying") {
@@ -42,12 +42,12 @@ function replyButtonClick(element, commenterOveride = "") {
 function replyButtonClickEvent(e) { replyButtonClick(e.target) }
 
 function doubleReplyButtonClickEvent(e) {
-  const replyID = getLastEl(e.target.id.split("-"));
-  const reply = document.getElementById(`reply-${replyID}`);
-  const commentID = getLastEl(reply.parentElement.id.split("-"));
+  const replyID = getLastEl(e.target.id.split("_"));
+  const reply = document.getElementById(`reply_${replyID}`);
+  const commentID = getLastEl(reply.parentElement.id.split("_"));
 
-  const commentReplyButton = document.getElementById(`comment-reply-button-for-${commentID}`);
-  const replyingTo = document.getElementById(`reply-blog-title-for-${replyID}`).innerHTML;
+  const commentReplyButton = document.getElementById(`comment-reply-button-for_${commentID}`);
+  const replyingTo = document.getElementById(`reply-blog-title-for_${replyID}`).innerHTML;
 
   replyButtonClick(commentReplyButton, replyingTo);
 }

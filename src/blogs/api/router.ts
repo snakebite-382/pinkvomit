@@ -6,6 +6,11 @@ import { Blog, Follow, ID, IsAuthedRequest, User } from 'types';
 import { ResultSetHeader } from 'mysql2';
 import { Session } from 'node:sqlite';
 
+function getDefaultIndexPage(blogTitle: string) {
+  return `# Welcome to ${blogTitle}
+[posts (minimal)]`
+}
+
 const validateTitle = async (title: string, userID: ID): Promise<[boolean, string[]]> => {
   const validCharacters = "qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM1234567890-_*[]()^!.";
   let valid = true;
@@ -19,7 +24,7 @@ const validateTitle = async (title: string, userID: ID): Promise<[boolean, strin
     }
   }
 
-  const [rows] = await database.query("SELECT title FROM blogs WHERE title = ? and userID = ?", [title, userID]) as [Blog[], any];
+  const [rows] = await database.query("SELECT title FROM blogs WHERE BINARY title = ? and userID = ?", [title, userID]) as [Blog[], any];
 
   if (rows.length !== 0) {
     valid = false;
@@ -37,17 +42,17 @@ router.post("/validate/title", protect((req) => ({ allowNoSelectedBlog: true }))
   try {
     const [valid, invalidChars] = await validateTitle(req.body.title, req.user.id);
     if (valid) {
-      res.send('')
+      res.send('<div id="title-result"></div>')
     } else {
       if (invalidChars.length > 0) {
-        res.send(`Title contains invalid characters: "${invalidChars.toString()}"`)
+        res.send(`<div id="title-result" class="error">Title contains invalid characters: "${invalidChars.toString()}"</div>`)
       } else {
-        res.send(`You already have a blog titled: ${req.body.title}`);
+        res.send(`<div id="title-result" class="error">You already have a blog titled: ${req.body.title}</div>`);
       }
     }
   } catch (err) {
     console.error(err);
-    res.send("SERVER ERROR");
+    res.send("<div id='title-result' class='error'>SERVER ERROR</div>");
   }
 })
 
@@ -60,13 +65,25 @@ router.post("/create", protect((req) => ({ allowNoSelectedBlog: true })), async 
     const [valid, _] = await validateTitle(req.body.title, req.user.id)
 
     if (valid) {
-      const [newBlog] = await database.query<ResultSetHeader>("INSERT INTO blogs (userID, title, stylesheet) VALUES (?, ?, ?)", [req.user.id, req.body.title, ""]);;
+      const id = crypto.randomUUID();
+      const [newBlog] = await database.query("INSERT INTO blogs (id, userID, title, stylesheet) VALUES (?, ?, ?, ?)", [id, req.user.id, req.body.title, ""]) as [Blog[], any];
 
-      await database.query("UPDATE sessions SET selectedBlogID = ? WHERE uuid = ?", [newBlog.insertId, req.token.uuid])
+      await database.query("UPDATE sessions SET selectedBlogID = ? WHERE id = ?", [id, req.token.uuid])
 
       if (req.blogs.length === 0) {
-        await database.query("UPDATE users SET mainBlogID = ? WHERE id = ?", [newBlog.insertId, req.user.id]);
+        await database.query("UPDATE users SET mainBlogID = ? WHERE id = ?", [id, req.user.id]);
       }
+
+      const pageID = crypto.randomUUID();
+      const [newBlogIndexPage] = await database.query(`
+        INSERT INTO pages (id, title, content, blogID) 
+        values (?, ?, ?, ?)`,
+        [
+          pageID,
+          "index",
+          getDefaultIndexPage(req.body.blogTitle),
+          id
+        ])
 
       res.set("HX-Refresh", 'true');
 
@@ -100,7 +117,7 @@ router.put(
         return;
       }
 
-      await database.query("UPDATE sessions SET selectedBlogID = ? WHERE uuid = ?", [requestedBlog.id, req.token.uuid]); // select new one
+      await database.query("UPDATE sessions SET selectedBlogID = ? WHERE id = ?", [requestedBlog.id, req.token.uuid]); // select new one
 
       res.send("<div id='select-result' class='success'></div>");
       return;
@@ -153,7 +170,7 @@ router.post("/delete/:id",
     try {
       let [ownsBlog] = await database.query("SELECT id FROM blogs WHERE id = ? AND userID = ?", [req.params.id, req.user.id]) as [Blog[], any];
       let [mainBlog] = await database.query("SELECT mainBlogID FROM users WHERE id = ? AND mainBlogID = ?", [req.user.id, req.params.id]) as [User[], any];
-      let [selectedBlog] = await database.query("SELECT selectedBlogID FROM sessions WHERE uuid = ? AND selectedBlogID = ?", [req.token.uuid, req.params.id]) as [Session[], any];
+      let [selectedBlog] = await database.query("SELECT selectedBlogID FROM sessions WHERE id = ? AND selectedBlogID = ?", [req.token.uuid, req.params.id]) as [Session[], any];
 
       if (ownsBlog.length === 0) {
         res.status(401).send("UNAUTH");
@@ -165,7 +182,7 @@ router.post("/delete/:id",
       }
 
       if (selectedBlog.length !== 0) {
-        await database.query("UPDATE sessions SET selectedBlogID = ? WHERE uuid = ?", [null, req.token.uuid])
+        await database.query("UPDATE sessions SET selectedBlogID = ? WHERE id = ?", [null, req.token.uuid])
       }
 
       await database.query("DELETE FROM blogs WHERE id = ?", [req.params.id])

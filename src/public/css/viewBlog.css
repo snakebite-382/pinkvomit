@@ -32,3 +32,8 @@
   max-width: 45vw;
   width: 45vw;
 }
+
+.pagesNav {
+  display: flex;
+  justify-content: space-evenly;
+}

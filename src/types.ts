@@ -1,12 +1,30 @@
 import { Request } from "express";
+import { validate as isValidUUID } from 'uuid';
 
-export type ID = number;
+export type ID = string;
 export function IsID(id: any): id is ID {
-  return typeof id == "number";
+  const valid = typeof id == "string" && isValidUUID(id);
+  if (!valid && id !== null) { // don't log if null is explicitly allowed elsewhere
+    console.log(`IsID failed`, {
+      value: id,
+      typeof: typeof id,
+      isValidUUID: isValidUUID(id)
+    });
+  }
+  return valid;
 }
+
 export type DB_TIMESTAMP = Date;
 export function IsDBTimestamp(ts: any): ts is DB_TIMESTAMP {
-  return typeof ts == "object" && ts instanceof Date;
+  const valid = typeof ts == "object" && ts instanceof Date;
+  if (!valid) {
+    console.log("IsDBTimestamp failed", {
+      value: ts,
+      typeof: typeof ts,
+      instanceofDate: ts instanceof Date
+    });
+  }
+  return valid;
 }
 
 export interface DB_OBJECT {
@@ -16,7 +34,7 @@ export interface DB_OBJECT {
 }
 
 function IsDBObject(obj: object): obj is DB_OBJECT {
-  return (
+  const valid = (
     "id" in obj &&
     IsID((obj as any).id) &&
     "created_at" in obj &&
@@ -24,31 +42,55 @@ function IsDBObject(obj: object): obj is DB_OBJECT {
     "updated_at" in obj &&
     IsDBTimestamp((obj as any).updated_at)
   );
+
+  if (!valid) {
+    console.log("IsDBObject failed", {
+      obj,
+      hasId: "id" in obj,
+      idValid: "id" in obj ? IsID((obj as any).id) : false,
+      hasCreatedAt: "created_at" in obj,
+      createdAtValid: "created_at" in obj ? IsDBTimestamp((obj as any).created_at) : false,
+      hasUpdatedAt: "updated_at" in obj,
+      updatedAtValid: "updated_at" in obj ? IsDBTimestamp((obj as any).updated_at) : false
+    });
+  }
+  return valid;
 }
 
-
 export interface User extends DB_OBJECT {
-  id: ID,
   email: string,
   password: string,
   emailVerified: 0 | 1,
-  mainBlogID: ID,
-  created_at: DB_TIMESTAMP,
-  updated_at: DB_TIMESTAMP
+  mainBlogID: ID | null,
 }
 
 export function IsUser(user: object): user is User {
-  return (
+  const valid = (
     IsDBObject(user) &&
     "email" in user &&
-    typeof user.email == "string" &&
+    typeof (user as any).email == "string" &&
     "password" in user &&
-    typeof user.password == "string" &&
+    typeof (user as any).password == "string" &&
     "emailVerified" in user &&
-    (user.emailVerified === 0 || user.emailVerified === 1) &&
+    ((user as any).emailVerified === 0 || (user as any).emailVerified === 1) &&
     "mainBlogID" in user &&
-    IsID(user.mainBlogID)
-  )
+    ((user as any).mainBlogID === null || IsID((user as any).mainBlogID))
+  );
+
+  if (!valid) {
+    console.log("IsUser failed", {
+      user,
+      dbObjectValid: IsDBObject(user),
+      email: (user as any).email,
+      emailValid: typeof (user as any).email === "string",
+      passwordValid: typeof (user as any).password === "string",
+      emailVerified: (user as any).emailVerified,
+      emailVerifiedValid: (user as any).emailVerified === 0 || (user as any).emailVerified === 1,
+      mainBlogID: (user as any).mainBlogID,
+      mainBlogIDValid: (user as any).mainBlogID === null || IsID((user as any).mainBlogID)
+    });
+  }
+  return valid;
 }
 
 export interface Session extends DB_OBJECT {
@@ -59,68 +101,88 @@ export interface Session extends DB_OBJECT {
 }
 
 export function IsSession(session: object): session is Session {
-  return (
+  const valid = (
     IsDBObject(session) &&
     "uuid" in session &&
-    typeof session.uuid == "string" &&
+    typeof (session as any).uuid == "string" &&
     "userID" in session &&
-    IsID(session.userID) &&
+    IsID((session as any).userID) &&
     "selectedBlogID" in session &&
-    IsID(session.selectedBlogID) &&
+    IsID((session as any).selectedBlogID) &&
     "expiresAt" in session &&
-    typeof session.expiresAt == "number"
-  )
+    typeof (session as any).expiresAt == "number"
+  );
+
+  if (!valid) {
+    console.log("IsSession failed", { session });
+  }
+  return valid;
 }
 
 export interface Blog extends DB_OBJECT {
   title: string,
   stylesheet: string,
-  userID: ID
+  userID: ID | null
 }
 
 export function IsBlog(blog: object): blog is Blog {
-  return (
+  const valid = (
     IsDBObject(blog) &&
     "title" in blog &&
-    typeof blog.title == "string" &&
+    typeof (blog as any).title == "string" &&
     "stylesheet" in blog &&
-    typeof blog.stylesheet == "string" &&
+    typeof (blog as any).stylesheet == "string" &&
     "userID" in blog &&
-    IsID(blog.userID)
-  )
+    ((blog as any).userID === null || IsID((blog as any).userID))
+  );
+
+  if (!valid) {
+    console.log("IsBlog failed", { blog });
+  }
+  return valid;
 }
 
 export interface Page extends DB_OBJECT {
   title: string,
   content: string,
-  blogID: ID
+  blogID: ID | null
 }
 
 export function IsPage(page: object): page is Page {
-  return (
+  const valid = (
     IsDBObject(page) &&
     "title" in page &&
-    typeof page.title == "string" &&
+    typeof (page as any).title == "string" &&
     "content" in page &&
-    typeof page.content == "string" &&
+    typeof (page as any).content == "string" &&
     "blogID" in page &&
-    IsID(page.blogID)
-  )
+    ((page as any).blogID === null || IsID((page as any).blogID))
+  );
+
+  if (!valid) {
+    console.log("IsPage failed", { page });
+  }
+  return valid;
 }
 
 export interface Post extends DB_OBJECT {
   content: string,
-  blogID: ID,
+  blogID: ID | null,
 }
 
 export function IsPost(post: object): post is Post {
-  return (
+  const valid = (
     IsDBObject(post) &&
     "content" in post &&
-    typeof post.content == "string" &&
+    typeof (post as any).content == "string" &&
     "blogID" in post &&
-    IsID(post.blogID)
-  )
+    ((post as any).blogID === null || IsID((post as any).blogID))
+  );
+
+  if (!valid) {
+    console.log("IsPost failed", { post });
+  }
+  return valid;
 }
 
 export interface TimelinePost extends Post {
@@ -131,33 +193,45 @@ export interface TimelinePost extends Post {
 }
 
 export function IsTimelinePost(post: object): post is TimelinePost {
-  return (
+  const valid = (
     IsPost(post) &&
     "likedByBlog" in post &&
-    typeof post.likedByBlog == "boolean" &&
+    typeof (post as any).likedByBlog == "boolean" &&
     "likeCount" in post &&
-    typeof post.likeCount == "number" &&
+    typeof (post as any).likeCount == "number" &&
     "commentCount" in post &&
-    typeof post.commentCount == "number"
-  )
+    typeof (post as any).commentCount == "number" &&
+    "blogTitle" in post &&
+    typeof (post as any).blogTitle == "string"
+  );
+
+  if (!valid) {
+    console.log("IsTimelinePost failed", { post });
+  }
+  return valid;
 }
 
 export interface Comment extends DB_OBJECT {
   content: string,
-  postID: ID,
-  blogID: ID
+  postID: ID | null,
+  blogID: ID | null
 }
 
 export function IsComment(comment: object): comment is Comment {
-  return (
+  const valid = (
     IsDBObject(comment) &&
     "content" in comment &&
-    typeof comment.content == "string" &&
+    typeof (comment as any).content == "string" &&
     "postID" in comment &&
-    IsID(comment.postID) &&
+    ((comment as any).postID === null || IsID((comment as any).postID)) &&
     "blogID" in comment &&
-    IsID(comment.blogID)
-  )
+    ((comment as any).blogID === null || IsID((comment as any).blogID))
+  );
+
+  if (!valid) {
+    console.log("IsComment failed", { comment });
+  }
+  return valid;
 }
 
 export interface TimelineComment extends Comment {
@@ -165,32 +239,42 @@ export interface TimelineComment extends Comment {
 }
 
 export function IsTimelineComment(comment: object): comment is TimelineComment {
-  return (
+  const valid = (
     IsComment(comment) &&
     "blogTitle" in comment &&
-    typeof comment.blogTitle == "string"
-  )
+    typeof (comment as any).blogTitle == "string"
+  );
+
+  if (!valid) {
+    console.log("IsTimelineComment failed", { comment });
+  }
+  return valid;
 }
 
 export interface Reply extends DB_OBJECT {
   content: string,
-  commentID: ID,
-  blogID: ID,
+  commentID: ID | null,
+  blogID: ID | null,
   atBlog: string
 }
 
 export function IsReply(reply: object): reply is Reply {
-  return (
+  const valid = (
     IsDBObject(reply) &&
     "content" in reply &&
-    typeof reply.content == "string" &&
+    typeof (reply as any).content == "string" &&
     "commentID" in reply &&
-    IsID(reply.commentID) &&
+    ((reply as any).commentID === null || IsID((reply as any).commentID)) &&
     "blogID" in reply &&
-    IsID(reply.blogID) &&
+    ((reply as any).blogID === null || IsID((reply as any).blogID)) &&
     "atBlog" in reply &&
-    typeof reply.atBlog == "string"
-  )
+    typeof (reply as any).atBlog == "string"
+  );
+
+  if (!valid) {
+    console.log("IsReply failed", { reply });
+  }
+  return valid;
 }
 
 export interface TimelineReply extends Reply {
@@ -198,26 +282,36 @@ export interface TimelineReply extends Reply {
 }
 
 export function IsTimelineReply(reply: object): reply is TimelineReply {
-  return (
+  const valid = (
     IsReply(reply) &&
     "blogTitle" in reply &&
-    typeof reply.blogTitle == "string"
-  )
+    typeof (reply as any).blogTitle == "string"
+  );
+
+  if (!valid) {
+    console.log("IsTimelineReply failed", { reply });
+  }
+  return valid;
 }
 
 export interface Follow extends DB_OBJECT {
-  following_blogID: ID,
-  followed_blogID: ID,
+  following_blogID: ID | null,
+  followed_blogID: ID | null,
 }
 
 export function IsFollow(follow: object): follow is Follow {
-  return (
+  const valid = (
     IsDBObject(follow) &&
     "followed_blogID" in follow &&
-    IsID(follow.followed_blogID) &&
+    ((follow as any).followed_blogID === null || IsID((follow as any).followed_blogID)) &&
     "following_blogID" in follow &&
-    IsID(follow.following_blogID)
-  )
+    ((follow as any).following_blogID === null || IsID((follow as any).following_blogID))
+  );
+
+  if (!valid) {
+    console.log("IsFollow failed", { follow });
+  }
+  return valid;
 }
 
 export interface ProtectOptions {
@@ -241,7 +335,7 @@ export type AuthedRequest<
   authed: true,
   token: DecodedJWT,
   blogs: Blog[],
-  selectedBlog: Blog | null
+  selectedBlog: Blog
 };
 
 export function IsAuthedRequest(req: Request): req is AuthedRequest {
@@ -261,19 +355,19 @@ export function IsAuthedRequest(req: Request): req is AuthedRequest {
     (req.selectedBlog == null || IsBlog(req.selectedBlog))
   );
 
-  // if (!valid) {
-  //   console.log("IsAuthedRequest failed check", {
-  //     user: req.user,
-  //     isUser: req.user ? IsUser(req.user) : false,
-  //     authed: req.authed,
-  //     token: req.token,
-  //     isDecodedJWT: req.token ? IsDecodedJWT(req.token) : false,
-  //     blogs: req.blogs,
-  //     blogsValid: Array.isArray(req.blogs) && req.blogs.every(IsBlog),
-  //     selectedBlog: req.selectedBlog,
-  //     selectedBlogValid: req.selectedBlog == null || IsBlog(req.selectedBlog)
-  //   });
-  // }
+  if (!valid) {
+    console.log("IsAuthedRequest failed", {
+      user: req.user,
+      isUser: req.user ? IsUser(req.user) : false,
+      authed: req.authed,
+      token: req.token,
+      isDecodedJWT: req.token ? IsDecodedJWT(req.token) : false,
+      blogs: req.blogs,
+      blogsValid: Array.isArray(req.blogs) && req.blogs.every(IsBlog),
+      selectedBlog: req.selectedBlog,
+      selectedBlogValid: req.selectedBlog == null || IsBlog(req.selectedBlog)
+    });
+  }
   return valid;
 }
 
@@ -285,14 +379,22 @@ export interface DecodedJWT {
 }
 
 export function IsDecodedJWT(token: object): token is DecodedJWT {
-  return ("email" in token &&
-    typeof token.email == "string" &&
+  const valid = (
+    "email" in token &&
+    typeof (token as any).email == "string" &&
     "uuid" in token &&
-    typeof token.uuid == "string" &&
+    typeof (token as any).uuid == "string" &&
     "exp" in token &&
-    typeof token.exp == "number" &&
+    typeof (token as any).exp == "number" &&
     "iat" in token &&
-    typeof token.iat == "number"
-  )
+    typeof (token as any).iat == "number"
+  );
+
+  if (!valid) {
+    console.log("IsDecodedJWT failed", { token });
+  }
+  return valid;
 }
+
 export type GetProtectOptions = (req: any) => ProtectOptions;
+

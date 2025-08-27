@@ -147,10 +147,10 @@ interface RenderRules {
   currentPageLength: number,
 }
 
-const maxPageLength = 16384;
+const maxPageLength = 65536;
 
 export async function renderPage(
-  content: string,
+  page: Page,
   blogTitle: string,
   presanitized: boolean = true,
   rules: RenderRules = {
@@ -158,18 +158,23 @@ export async function renderPage(
     pagesRendered: [],
     currentPageLength: 0,
   }): Promise<[string, string[]]> {
+  let { content } = page;
   if (!presanitized) {
     content = sanitizeMarkdown(content);
   }
 
   const renderedMarkdown = renderMarkdown(content);
   const [tokens, errors] = tokenizeMarkdown(renderedMarkdown);
-  rules.currentPageLength = renderedMarkdown.length;
+  rules.currentPageLength += renderedMarkdown.length;
+  rules.pagesRendered.push(page.title);
 
   let output = ""
+  let lookingForSectionEnds = 0;
+  let lastLine = 0;
 
   for (let i = 0; i < tokens.length; i++) {
     let [tokenContent, isTag, line] = tokens[i];
+    lastLine = line;
 
     if (isTag) {
       let [tagName, params] = parseTag(tokenContent, errors, line);
@@ -183,6 +188,113 @@ export async function renderPage(
             rules.postsRendered = true;
           }
           break;
+        case "include":
+          console.log(page.title)
+          if (rules.pagesRendered.includes(params[0])) {
+            addError(errors, "Cannot render a page more than once", line);
+            break;
+          }
+
+          const [includedPages] = await database.query("SELECT * FROM pages  WHERE BINARY title = ? AND blogID = ?",
+            [params[0], page.blogID]) as [Page[], any];
+
+          if (includedPages.length === 0) {
+            addError(errors, "Page does not exist", line);
+            break;
+          }
+
+          console.log(rules)
+          let [includedPageContent, inclusionErrors] = await renderPage(includedPages[0], blogTitle, true, rules);
+          console.log(rules)
+
+          if (includedPageContent.length + rules.currentPageLength > maxPageLength) {
+            addError(errors, `Inlcuding page ${params[0]} makes the page too long (max is ${maxPageLength} characters long)`, line)
+            break;
+          }
+
+          if (inclusionErrors.length > 0) {
+            addError(errors, `Unresolved errors with rendering page ${params[0]}, errors: ${inclusionErrors.join(", ")}`, line);
+          }
+
+          output += includedPageContent;
+
+          break;
+
+        case "section":
+          output += `<div class="${params.join(', ')}">`
+          lookingForSectionEnds++;
+          break;
+        case "end":
+          if (lookingForSectionEnds === 0) {
+            addError(errors, "end with no matching section beginning", line);
+            break;
+          }
+          output += "</div>";
+          lookingForSectionEnds--;
+          break;
+        case "nav":
+          let invalidPages: string[] = [];
+          let longestPage = 0;
+          let navPagesValid = params.every(async (navPage) => {
+            if (rules.pagesRendered.includes(navPage)) {
+              addError(errors, `Cannot render page twice title: ${navPage}`, line);
+              return false
+            }
+
+            let [pageExists] = await database.query("SELECT * FROM pages WHERE BINARY title = ? AND blogID = ?",
+              [navPage, page.blogID]) as [Page[], any];
+
+            if (pageExists.length === 0) {
+              addError(errors, `Could not find page with title: ${navPage}`, line);
+              invalidPages.push(navPage);
+              return false;
+            }
+
+            const saveRuleState = rules;
+            const [navPageContent, navPageErrors] = await renderPage(pageExists[0], blogTitle, true, rules);
+            rules = saveRuleState;
+
+            if (navPageErrors.length > 0) {
+              addError(errors, `Unresolved errors in page ${navPage}, errors: ${navPageErrors.join(", ")}`, line);
+              return false;
+            }
+
+            if (navPageContent.length + rules.currentPageLength > maxPageLength) {
+              addError(errors, `Page ${navPage} would make the page too long (max length is ${maxPageLength}`, line);
+              return false;
+            }
+
+            return true;
+          })
+
+          if (!navPagesValid) {
+            break;
+          }
+
+          let navID = crypto.randomUUID();
+          console.log(params)
+
+          output += `<ul id="page-nav_${navID}" class="pagesNav">
+${params.map((pageTitle, index) => {
+            return `<li id="page-nav-item_${pageTitle}" class="page-nav-item-for_${navID}">
+  <form 
+      hx-post="/pages/api/navigate/"
+      hx-trigger="click${index === 0 ? ", load" : ""}"
+      hx-target="#page-nav-result-for_${navID}"
+      hx-swap="innerHTML"
+  >
+    <input type="hidden" name="rules" value='${JSON.stringify(rules)}'>
+    <input type="hidden" name="title" value="${pageTitle}">
+    <input type="hidden" name="blogID" value="${page.blogID}">
+    <input type="hidden" name="blogTitle" value="${blogTitle}" >
+    <a href="" hx-trigger="never">${pageTitle}</a>
+  </form>
+</li>
+`}).join(" ")}
+</ul>
+<div id="page-nav-result-for_${navID}" class="page-nav-result"></div>`
+
+          break;
         default:
           addError(errors, `Unkown Tag, ${tagName}`, line)
           break;
@@ -190,9 +302,15 @@ export async function renderPage(
 
     } else {
       output += tokenContent;
+      rules.currentPageLength += tokenContent.length;
     }
 
   }
+
+  if (lookingForSectionEnds > 0) {
+    addError(errors, "Unclosed section tag, every section needs a matching end", lastLine);
+  }
+
   return [output, errors]
 }
 

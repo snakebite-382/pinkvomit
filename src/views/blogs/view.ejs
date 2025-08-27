@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <%- include('../partials/head') %>
     <link rel="stylesheet" href="/css/viewBlog.css" />
-    <link rel="stylesheet" href="/css/postStyles.css"
+    <link rel="stylesheet" href="/css/postStyles.css" />
   </head>
 
   <body>
@@ -32,14 +32,13 @@
         <% } %>
 
         <% if (ownsBlog) { %>
-        <button id="open-create-page">Create Page</button>
+        <button id="open-create-page">Edit Pages</button>
         <div id="create-page" class="hidden">
           <div id="create-form">
-            <h3>Create Page</h3>
             <form
               id="create-page-form"
-              hx-post="/pages/api/create"
-              hx-target="#create-result"
+              hx-post="/pages/api/update"
+              hx-target="#update-result"
               hx-swap="outerHTML"
             >
               <input type="hidden" name="id" value="<%= viewedBlog.id %>" />
@@ -49,25 +48,38 @@
                 value="<%= viewedBlog.title %>"
               />
               <label for="title">Title:</label><br />
-              <input type="text" name="title" id="title" /><br />
+              <select id="title-select" name="title">
+                <% for(let i = 0; i < pages.length; i++) { %>
+                <option value="<%= pages[i].title %>:<%= pages[i].id %>">
+                  <%= pages[i].title %>
+                </option>
+                <% } %>
+                <option value="_NEW_">NEW</option></select
+              ><br />
+              <div id="new-title-container">
+                <label for="new-title" id="new-title-label">New Title: </label>
+                <input type="text" name="new-title" id="new-title" />
+              </div>
               <label for="content">Content: </label><br />
               <textarea
                 id="content"
                 name="content"
                 maxlength="8192"
                 hx-post="/pages/api/preview"
-                hx-trigger="input"
+                hx-trigger="renderPreview"
                 hx-target="#preview-result"
                 hx-swap="outerHTML"
               ></textarea>
+              <button>Submit</button>
+              <button class="hidden" id="delete-button">Delete</button>
             </form>
-            <div id="create-result"></div>
+            <div id="update-result"></div>
           </div>
           <div id="preview-result"></div>
         </div>
         <% } %>
 
-        <div id="blog-pages"></div>
+        <div id="index-page"><%-renderedPage -%></div>
       </div>
     </div>
 

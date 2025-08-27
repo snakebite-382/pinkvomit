@@ -2,7 +2,7 @@ import express from 'express';
 const router = express.Router();
 import database from '../../database'
 import argon from 'argon2'
-import { login, protect } from '../middleware';
+import { getSessionCookieSettings, login, protect } from '../middleware';
 import { User, IsAuthedRequest } from '../../types';
 
 function validateEmail(email: string) {
@@ -106,6 +106,7 @@ router.post("/signup", async (req, res) => {
       res.send("<div id='signup-result' class='error'>SERVER ERROR</div>");
     }
   } else {
+    console.log(`email: ${validateEmail(email)}, password: ${validatePassword(password)}, confirm: ${password.localeCompare(confirmPassword) === 0}`)
     res.send("<div id='signup-result' class='error'>Some inputs are invalid</div>");
   }
 });
@@ -129,10 +130,7 @@ router.post("/login", async (req, res) => {
   }
 
   if (loggedIn) {
-    res.cookie("sessionToken", signedToken, {
-      maxAge: 2 * 60 * 60 * 1000,
-      sameSite: true
-    });
+    res.cookie("sessionToken", signedToken, getSessionCookieSettings());
 
     res.set("HX-Redirect", "/")
 

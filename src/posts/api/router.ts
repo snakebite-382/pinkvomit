@@ -122,16 +122,17 @@ router.post("/create/comment", protect(), async (req, res) => {
   }
 
   const sanitizedContent = insane(req.body.content, { allowedTags: [] }); //strip all html
+  const id = crypto.randomUUID();
 
   try {
     if (req.body.replying == 'true') {
       //reply logic
-      const [replyInsert] = await database.query<ResultSetHeader>("INSERT INTO replies (content, commentID, blogID, atBlog) VALUES (?, ?, ?, ?)", [sanitizedContent, req.body.commentID, req.selectedBlog.id, req.body.atBlog])
+      const [replyInsert] = await database.query<ResultSetHeader>("INSERT INTO replies (id, content, commentID, blogID, atBlog) VALUES (?, ?, ?, ?, ?)", [id, sanitizedContent, req.body.commentID, req.selectedBlog.id, req.body.atBlog])
       const reply: TimelineReply = {
         content: sanitizedContent,
         blogTitle: req.selectedBlog.title,
         atBlog: req.body.atBlog,
-        id: replyInsert.insertId,
+        id: id,
         created_at: new Date(),
         updated_at: new Date(),
         commentID: req.body.commentID,
@@ -140,14 +141,14 @@ router.post("/create/comment", protect(), async (req, res) => {
 
 
       res.send(`
-        <div hx-swap-oob="beforeend:#comment-replies-for-${req.body.commentID}">
+        <div hx-swap-oob="beforeend:#comment-replies-for_${req.body.commentID}">
           ${renderReply(reply)}
         </div>`);
     } else {
       // comment logic
-      const [commentInsert] = await database.query<ResultSetHeader>("INSERT INTO comments (content, postID, blogID) VALUES (?, ?, ?)", [sanitizedContent, req.body.postID, req.selectedBlog.id]);
+      const [commentInsert] = await database.query<ResultSetHeader>("INSERT INTO comments (id, content, postID, blogID) VALUES (?, ?, ?, ?)", [id, sanitizedContent, req.body.postID, req.selectedBlog.id]);
       const comment: TimelineComment = {
-        id: commentInsert.insertId,
+        id: id,
         content: sanitizedContent,
         blogID: req.selectedBlog.id,
         blogTitle: req.selectedBlog.title,

@@ -5,10 +5,52 @@ import database from '../database';
 import { Blog, DecodedJWT, GetProtectOptions, IsAuthedRequest, Session, User } from '../types';
 import { NextFunction, Request, Response } from 'express';
 
+// Helper functions:
+function getSessionToken(email: string): DecodedJWT {
+  return {
+    email: email,
+    uuid: crypto.randomUUID(),
+    exp: Date.now() + (2 * 60 * 60 * 1000),
+    iat: Date.now()
+  }
+}
+
+export function getSessionCookieSettings() {
+  return {
+    maxAge: 2 * 60 * 60 * 1000,
+    sameSite: true,
+  }
+}
+
 export async function getUserByEmail(email: string): Promise<User> {
   const [rows] = await database.query("SELECT * FROM users WHERE email = ?", [email]) as [User[], any];
   return rows[0];
 };
+
+export async function login(email: string, password: string): Promise<[null, null, false] | [string, DecodedJWT, true]> {
+  let user = await getUserByEmail(email);
+
+  if (user === undefined) {
+    // invalid email
+    return [null, null, false];
+  }
+
+  let validPassword = await argon.verify(user.password, password)
+
+  if (validPassword) {
+    let token = getSessionToken(user.email);
+
+    let signedToken = signer.sign(token);
+
+    await database.query("INSERT INTO sessions (id, userID, expiresAt, selectedBlogID) VALUES (?, ?, ?, ?)", [token.uuid, user.id, token.exp, user.mainBlogID])
+
+    return [signedToken, token, true];
+  }
+
+  return [null, null, false];
+}
+
+// Middleware:
 
 export async function authenticate(req: Request, res: Response, next: NextFunction) {
   if (!("sessionToken" in req.cookies)) {
@@ -36,7 +78,7 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
 
   try {
 
-    let [rows] = await database.query("SELECT uuid FROM sessions WHERE uuid = ?", [verifiedToken.uuid]) as [Session[], any];
+    let [rows] = await database.query("SELECT id FROM sessions WHERE id = ?", [verifiedToken.uuid]) as [Session[], any];
 
     if (rows.length === 0) {
       req.authed = false;
@@ -68,32 +110,22 @@ export async function keepAlive(req: Request, res: Response, next: NextFunction)
     try {
       let user = await getUserByEmail(decodedToken.email);
 
-
-      let token = {
-        email: user.email,
-        uuid: crypto.randomUUID(),
-        exp: Date.now() + (2 * 60 * 60 * 1000),
-        iat: Date.now()
-      };
+      let token = getSessionToken(user.email);
 
       let signedToken = signer.sign(token)
 
-      res.cookie("sessionToken", signedToken, {
-        maxAge: 2 * 60 * 60 * 1000,
-        sameSite: true,
-      })
+      res.cookie("sessionToken", signedToken, getSessionCookieSettings())
 
-      const [selectedBlog] = await database.query("SELECT selectedBlogID FROM sessions WHERE uuid = ?", [decodedToken.uuid]) as [Session[], any];
+      const [selectedBlog] = await database.query("SELECT selectedBlogID FROM sessions WHERE id = ?", [decodedToken.uuid]) as [Session[], any];
 
-      await database.query("DELETE FROM sessions WHERE uuid = ?", [decodedToken.uuid]);
+      await database.query("DELETE FROM sessions WHERE id = ?", [decodedToken.uuid]);
 
-      await database.query("INSERT INTO sessions (uuid, userID, expiresAt, selectedBlogID) VALUES (?, ?, ?, ?)", [token.uuid, user.id, token.exp, selectedBlog[0].selectedBlogID])
+      await database.query("INSERT INTO sessions (id, userID, expiresAt, selectedBlogID) VALUES (?, ?, ?, ?)", [token.uuid, user.id, token.exp, selectedBlog[0].selectedBlogID])
     } catch (error) {
       console.error(error)
       next();
     }
   }
-
   next()
 }
 
@@ -110,46 +142,19 @@ export async function fetchUser(req: Request, res: Response, next: NextFunction)
     req.user = await getUserByEmail(req.token.email) as User;
     const [blogs] = await database.query("SELECT * FROM blogs WHERE userID = ?", [req.user.id]) as [Blog[], any];
 
-    let [sessions] = await database.query("SELECT selectedBlogID FROM sessions WHERE uuid = ?", [req.token.uuid]) as [Session[], any];
+    let [sessions] = await database.query("SELECT selectedBlogID FROM sessions WHERE id = ?", [req.token.uuid]) as [Session[], any];
 
     const [selectedBlogs] = await database.query("SELECT * FROM blogs WHERE id = ?", [sessions[0].selectedBlogID]) as [Blog[], any];
 
     req.blogs = blogs;
-    req.selectedBlog = selectedBlogs[0];
+    req.selectedBlog = selectedBlogs.length !== 0 ? selectedBlogs[0] : null;
 
     next();
+
   } catch (error) {
     console.error(error);
     next();
   }
-}
-
-export async function login(email: string, password: string): Promise<[null, null, false] | [string, DecodedJWT, true]> {
-  let user = await getUserByEmail(email);
-
-  if (user === undefined) {
-    // invalid email
-    return [null, null, false];
-  }
-
-  let validPassword = await argon.verify(user.password, password)
-
-  if (validPassword) {
-    let token = {
-      email: user.email,
-      uuid: crypto.randomUUID(),
-      exp: Date.now() + (2 * 60 * 60 * 1000), // set to expire in 2 hours
-      iat: Date.now()
-    };
-
-    let signedToken = signer.sign(token);
-
-    await database.query("INSERT INTO sessions (uuid, userID, expiresAt, selectedBlogID) VALUES (?, ?, ?, ?)", [token.uuid, user.id, token.exp, user.mainBlogID])
-
-    return [signedToken, token, true];
-  }
-
-  return [null, null, false];
 }
 
 export function protect(getOptions: GetProtectOptions = (req: Request) => ({})) {
@@ -181,7 +186,7 @@ export function protect(getOptions: GetProtectOptions = (req: Request) => ({})) 
       if ("id" in ownsBlog) {
         [ownsBlogQuery] = await database.query("SELECT id FROM blogs WHERE id = ? AND userID = ?", [ownsBlog.id, req.user.id]) as [Blog[], any];
       } else {
-        [ownsBlogQuery] = await database.query("SELECT title FROM blogs WHERE title = ? and userID = ?", [ownsBlog.title, req.user.id]) as [Blog[], any];
+        [ownsBlogQuery] = await database.query("SELECT title FROM blogs WHERE BINARY title = ? and userID = ?", [ownsBlog.title, req.user.id]) as [Blog[], any];
       }
       if (ownsBlogQuery.length === 0) {
         res.sendStatus(401);
