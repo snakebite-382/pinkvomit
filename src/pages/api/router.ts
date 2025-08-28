@@ -1,6 +1,6 @@
 import express from "express";
 import { protect } from "src/auth/middleware";
-import { renderPage } from "../page";
+import { RenderContext, renderPage } from "../page";
 import database from "../../database";
 import { ID, IsAuthedRequest, Page } from "types";
 import { sanitizeMarkdown } from "src/markdown";
@@ -53,7 +53,7 @@ router.post("/preview",
     <div id="preview-result">
       ${output}
       <div id="preview-errors">
-        ${errors.length === 0 ? "" : errors.map(error => `<div class="error">${error}</div>`)}
+        ${errors.length === 0 ? "" : errors.map(error => `<div class="error">${error}</div>`).join("")}
       </div>
     </div>`
       res.send(result);
@@ -103,14 +103,12 @@ router.post("/update",
         const [pageInsert] = await database.query("INSERT INTO pages (id, content, title, blogID) VALUES (?, ?, ?, ?)",
           [pageID, value.content, value.title, req.body.id]);
 
-        res.set("Hx-Refresh", "true")
         res.send(`<div id="update-result" class="success">Created page ${value.title}</div>`)
       } else {
 
         const [pageUpdate] = await database.query("UPDATE pages SET content = ? WHERE BINARY title = ? AND blogID = ?",
           [value.content, value.title, req.body.id]);
 
-        res.set("Hx-Refresh", "true")
         res.send(`<div id="update-result" class="success">Updated page ${value.title}</div>`)
       }
     } catch (error) {
@@ -128,8 +126,8 @@ router.post("/navigate", protect(), async (req, res) => {
   }
   console.log(req.body);
 
-  let { rules, title, blogID, blogTitle } = req.body;
-  rules = JSON.parse(rules);
+  let { contextState, title, blogID, blogTitle } = req.body;
+  const context = RenderContext.deserialize(contextState);
 
   try {
     let [getPages] = await database.query("SELECT * FROM pages WHERE BINARY title = ? AND blogID = ?", [title, blogID]) as [Page[], any];
@@ -138,7 +136,7 @@ router.post("/navigate", protect(), async (req, res) => {
       res.send(`<div class="error">Could not find page ${title}</div>`)
     }
 
-    let [renderedPage, errors] = await renderPage(getPages[0], blogTitle, true, rules);
+    let [renderedPage, errors] = await renderPage(getPages[0], blogTitle, true, context);
 
     if (errors.length > 0) {
       res.send("<div class='error'>There were errors with rendering this page that must be resolved before it can be used</div>")
