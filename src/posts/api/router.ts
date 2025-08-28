@@ -7,6 +7,7 @@ import { protect } from '../../auth/middleware';
 import { Follow, IsAuthedRequest, Post, TimelineComment, TimelinePost, TimelineReply } from "types";
 import { renderLikeButton, renderCommentButton, renderPost, renderComment, renderReply } from '../render';
 import { ResultSetHeader } from 'mysql2';
+import { contentValidator, sanitizeInput } from 'src/validation';
 
 
 router.post("/timeline", protect(), async (req, res) => {
@@ -93,7 +94,13 @@ router.get("/blog/:title", protect(), async (req, res) => {
 })
 
 router.post("/preview", protect(), (req, res) => {
-  res.send(`<div id='preview-result' class='markdown'> ${renderMarkdown(sanitizeMarkdown(req.body.content))}</div>`)
+  const { value, error } = contentValidator.validate(sanitizeMarkdown(req.body.content));
+
+  if (error != undefined) {
+    res.send(`<div id="preview-result" class="error">${error.message}</div>`)
+  }
+
+  res.send(`<div id='preview-result' class='markdown'> ${renderMarkdown(value)}</div>`)
 });
 
 router.post("/create", protect(), async (req, res) => {
@@ -102,8 +109,16 @@ router.post("/create", protect(), async (req, res) => {
     return;
   }
 
+  const sanitizedContent = sanitizeMarkdown(req.body.content);
+  const { value, error } = contentValidator.validate(sanitizedContent);
+
+  if (error != undefined) {
+    res.send(`<div id="create-result" class="error">${error.message}</div>`)
+    return;
+  }
+
   try {
-    await database.query("INSERT INTO posts (content, blogID) VALUES (?, ?)", [req.body.content, req.selectedBlog.id]);
+    await database.query("INSERT INTO posts (content, blogID) VALUES (?, ?)", [value, req.selectedBlog.id]);
     res.send("<div id='create-result' class='success'>Post Created!</div>")
   } catch (error) {
     req.logger.error(error)
@@ -123,15 +138,22 @@ router.post("/create/comment", protect(), async (req, res) => {
     return;
   }
 
-  const sanitizedContent = insane(req.body.content, { allowedTags: [] }); //strip all html
+  const sanitizedContent = sanitizeInput(req.body.content)
+  const { value, error } = contentValidator.validate(sanitizedContent);
+
+  if (error != undefined) {
+    res.sendStatus(400);
+    return;
+  }
+
   const id = crypto.randomUUID();
 
   try {
     if (req.body.replying == 'true') {
       //reply logic
-      const [replyInsert] = await database.query<ResultSetHeader>("INSERT INTO replies (id, content, commentID, blogID, atBlog) VALUES (?, ?, ?, ?, ?)", [id, sanitizedContent, req.body.commentID, req.selectedBlog.id, req.body.atBlog])
+      const [replyInsert] = await database.query<ResultSetHeader>("INSERT INTO replies (id, content, commentID, blogID, atBlog) VALUES (?, ?, ?, ?, ?)", [id, value, req.body.commentID, req.selectedBlog.id, req.body.atBlog])
       const reply: TimelineReply = {
-        content: sanitizedContent,
+        content: value,
         blogTitle: req.selectedBlog.title,
         atBlog: req.body.atBlog,
         id: id,
@@ -148,10 +170,10 @@ router.post("/create/comment", protect(), async (req, res) => {
         </div>`);
     } else {
       // comment logic
-      const [commentInsert] = await database.query<ResultSetHeader>("INSERT INTO comments (id, content, postID, blogID) VALUES (?, ?, ?, ?)", [id, sanitizedContent, req.body.postID, req.selectedBlog.id]);
+      const [commentInsert] = await database.query<ResultSetHeader>("INSERT INTO comments (id, content, postID, blogID) VALUES (?, ?, ?, ?)", [id, value, req.body.postID, req.selectedBlog.id]);
       const comment: TimelineComment = {
         id: id,
-        content: sanitizedContent,
+        content: value,
         blogID: req.selectedBlog.id,
         blogTitle: req.selectedBlog.title,
         postID: req.body.postID,

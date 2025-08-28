@@ -4,20 +4,21 @@ import { renderPage } from "../page";
 import database from "../../database";
 import { ID, IsAuthedRequest, Page } from "types";
 import { sanitizeMarkdown } from "src/markdown";
+import { pageValidator } from "src/validation";
+import { valid } from "joi";
 const router = express.Router();
 
 function checkTitleProtected(title: string): boolean {
-  switch (title.toLowerCase().trim().replace(/[0-9]/g, '').replace("-", "").replace("_", "")) {
+  switch (title.toLowerCase()) {
     case "new":
       return true;
     default:
       return false;
-
   }
 }
 
 router.post("/preview",
-  protect((req) => ({ ownsBlog: { id: req.body.id } })),
+  protect((req) => ({ ownsBlog: { id: req.body.id, title: req.body.blogTitle } })),
   async (req, res) => {
     if (!IsAuthedRequest(req)) {
       res.sendStatus(500);
@@ -26,11 +27,23 @@ router.post("/preview",
 
     const [pageTitle, pageID] = req.body.title.split(":");
 
+    let { value, error } = pageValidator.validate({ title: pageTitle, content: req.body.content })
+
+    if (error != undefined) {
+      res.send(`
+      <div id="preview-result">
+        <div id="preview-errors">
+          ${error.message}
+        </div>
+      </div>`)
+      return;
+    }
+
     const page: Page = {
       id: pageID,
       blogID: req.body.id as ID,
-      title: pageTitle,
-      content: req.body.content,
+      title: value.title,
+      content: value.content,
       created_at: new Date(),
       updated_at: new Date()
     }
@@ -63,52 +76,42 @@ router.post("/update",
     let [pageTitle, pageID] = req.body.title.split(":");
     const sanitizedContent = sanitizeMarkdown(req.body.content);
 
+    const { value, error } = pageValidator.validate({ title: pageTitle, content: sanitizedContent });
+
+    if (error != undefined) {
+      res.send(`<div id="update-result" class="error">${error.message}</div>`)
+      return;
+    }
 
     try {
       if (req.body.title == "_NEW_") {
         pageID = crypto.randomUUID();
         pageTitle = req.body['new-title'] as string;
 
-        const titleChars = "qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM0123456789_-";
-        let invalidChars = [];
-        let titleValid = pageTitle.length >= 3;
-        let titleProtected = checkTitleProtected(pageTitle);
+        const { value, error } = pageValidator.validate({ title: pageTitle, content: sanitizedContent });
 
-        if (titleValid) {
-          for (let i = 0; i < pageTitle.length; i++) {
-            if (!titleChars.includes(pageTitle.charAt(i))) {
-              titleValid = false;
-              invalidChars.push(pageTitle.charAt(i));
-            }
-          }
-        }
-
-        if (!titleValid) {
-          if (invalidChars.length > 0) {
-            res.send(`<div id="update-result" class="error">Invalid characters in title: ${invalidChars.join(", ")}</div>`);
-          } else {
-            res.send(`<div id="update-result" class="error">Title must be at least 3 characters long</div>`)
-          }
+        if (error != undefined) {
+          res.send(`<div id="update-result" class="error">${error.message}</div>`)
           return;
         }
 
-        if (titleProtected) {
-          res.send(`<div id="update-result" class="error">Title is protected from use: ${pageTitle}</div>`)
+        if (checkTitleProtected(value.title)) {
+          res.send(`<div id="update-result" class="error">Title is protected from use: ${value.title}</div>`)
           return;
         }
 
         const [pageInsert] = await database.query("INSERT INTO pages (id, content, title, blogID) VALUES (?, ?, ?, ?)",
-          [pageID, sanitizedContent, pageTitle, req.body.id]);
+          [pageID, value.content, value.title, req.body.id]);
 
         res.set("Hx-Refresh", "true")
-        res.send(`<div id="update-result" class="success">Created page ${pageTitle}</div>`)
+        res.send(`<div id="update-result" class="success">Created page ${value.title}</div>`)
       } else {
 
         const [pageUpdate] = await database.query("UPDATE pages SET content = ? WHERE BINARY title = ? AND blogID = ?",
-          [sanitizedContent, pageTitle, req.body.id]);
+          [value.content, value.title, req.body.id]);
 
         res.set("Hx-Refresh", "true")
-        res.send(`<div id="update-result" class="success">Updated page ${pageTitle}</div>`)
+        res.send(`<div id="update-result" class="success">Updated page ${value.title}</div>`)
       }
     } catch (error) {
       req.logger.error(error);
@@ -154,7 +157,7 @@ router.post("/navigate", protect(), async (req, res) => {
 
 router.get("/raw", protect(), async (req, res) => {
   try {
-    const [pages] = await database.query("SELECT contents FROM pages WHERE id = ?", [req.query.id]) as [Page[], any];
+    const [pages] = await database.query("SELECT content FROM pages WHERE id = ?", [req.query.id]) as [Page[], any];
 
     res.send(pages[0].content)
   } catch (error) {

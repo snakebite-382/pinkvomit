@@ -5,32 +5,12 @@ import { protect } from "../../auth/middleware";
 import { Blog, Follow, ID, IsAuthedRequest, User } from 'types';
 import { ResultSetHeader } from 'mysql2';
 import { Session } from 'node:sqlite';
+import { blogValidator, sanitizeInput } from 'src/validation';
+import Joi from 'joi';
 
 function getDefaultIndexPage(blogTitle: string) {
   return `# Welcome to ${blogTitle}
 [posts (minimal)]`
-}
-
-const validateTitle = async (title: string, userID: ID): Promise<[boolean, string[]]> => {
-  const validCharacters = "qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM1234567890-_*[]()^!.";
-  let valid = true;
-  let invalidChars = []
-
-  for (let i = 0; i < title.length; i++) {
-    let character = title.charAt(i);
-    if (!validCharacters.includes(character)) {
-      valid = false;
-      invalidChars.push(character)
-    }
-  }
-
-  const [rows] = await database.query("SELECT title FROM blogs WHERE BINARY title = ? and userID = ?", [title, userID]) as [Blog[], any];
-
-  if (rows.length !== 0) {
-    valid = false;
-  }
-
-  return [valid, invalidChars];
 }
 
 router.post("/validate/title", protect((req) => ({ allowNoSelectedBlog: true })), async (req, res) => {
@@ -39,17 +19,23 @@ router.post("/validate/title", protect((req) => ({ allowNoSelectedBlog: true }))
     return;
   }
 
+  let title = sanitizeInput(req.body.title);
+
   try {
-    const [valid, invalidChars] = await validateTitle(req.body.title, req.user.id);
-    if (valid) {
-      res.send('<div id="title-result"></div>')
-    } else {
-      if (invalidChars.length > 0) {
-        res.send(`<div id="title-result" class="error">Title contains invalid characters: "${invalidChars.toString()}"</div>`)
-      } else {
-        res.send(`<div id="title-result" class="error">You already have a blog titled: ${req.body.title}</div>`);
-      }
+    const { value, error } = blogValidator.validate({ title: title });
+
+    if (error != undefined) {
+      res.send(`<div id="title-result" class="error">${error.message}</div>`)
+      return;
     }
+
+    const [blogExists] = await database.query("SELECT title FROM blogs WHERE BINARY title = ?", value.title) as [Blog[], any];
+
+    if (blogExists.length > 0) {
+      res.send(`<div id='title-result' class='error'>${value.title} is already taken</div>`);
+    }
+
+    res.send('<div id="title-result"></div>')
   } catch (err) {
     req.logger.error(err)
     res.send("<div id='title-result' class='error'>SERVER ERROR</div>");
@@ -62,36 +48,47 @@ router.post("/create", protect((req) => ({ allowNoSelectedBlog: true })), async 
     res.sendStatus(500);
     return;
   }
+
+  const title = sanitizeInput(req.body.title);
+
   try {
-    const [valid, _] = await validateTitle(req.body.title, req.user.id)
+    const { value, error } = blogValidator.validate({ title: title })
 
-    if (valid) {
-      const id = crypto.randomUUID();
-      const [newBlog] = await database.query("INSERT INTO blogs (id, userID, title, stylesheet) VALUES (?, ?, ?, ?)", [id, req.user.id, req.body.title, ""]) as [Blog[], any];
+    if (error != undefined) {
+      res.send(`<div id='create-result' class='error'>${error.message}</div>`);
+      return;
+    }
 
-      await database.query("UPDATE sessions SET selectedBlogID = ? WHERE id = ?", [id, req.token.uuid])
+    const [blogExists] = await database.query("SELECT title FROM blogs WHERE BINARY title = ?", [value.title]) as [Blog[], any];
 
-      if (req.blogs.length === 0) {
-        await database.query("UPDATE users SET mainBlogID = ? WHERE id = ?", [id, req.user.id]);
-      }
+    if (blogExists.length > 0) {
+      res.send(`<div id="create-result" class="error">${value.title} is already taken</div>`)
+      return;
+    }
 
-      const pageID = crypto.randomUUID();
-      const [newBlogIndexPage] = await database.query(`
+    const id = crypto.randomUUID();
+    const [newBlog] = await database.query("INSERT INTO blogs (id, userID, title, stylesheet) VALUES (?, ?, ?, ?)", [id, req.user.id, value.title, ""]) as [Blog[], any];
+
+    await database.query("UPDATE sessions SET selectedBlogID = ? WHERE id = ?", [id, req.token.uuid])
+
+    if (req.blogs.length === 0) {
+      await database.query("UPDATE users SET mainBlogID = ? WHERE id = ?", [id, req.user.id]);
+    }
+
+    const pageID = crypto.randomUUID();
+    const [newBlogIndexPage] = await database.query(`
         INSERT INTO pages (id, title, content, blogID) 
         values (?, ?, ?, ?)`,
-        [
-          pageID,
-          "index",
-          getDefaultIndexPage(req.body.blogTitle),
-          id
-        ])
+      [
+        pageID,
+        "index",
+        getDefaultIndexPage(value.title),
+        id
+      ])
 
-      res.set("HX-Refresh", 'true');
+    res.set("HX-Refresh", 'true');
 
-      res.send("<div id='create-result' class='success'>Blog created successfully, refresh to view it</div>")
-    } else {
-      res.send("<div id='create-result' class='error'>Some inputs are invalid</div>");
-    }
+    res.send("<div id='create-result' class='success'>Blog created successfully, refresh to view it</div>")
   } catch (error) {
     req.logger.error(error);
     res.send("<div id='create-result' class='error'>SERVER ERROR</div>");
@@ -237,8 +234,16 @@ router.post("/search", protect(), async (req, res) => {
     return
   }
 
+  const searchValidator = Joi.string().min(1).max(256).trim();
+  const sanitizedSearch = sanitizeInput(req.body.search);
+  const { value, error } = searchValidator.validate(sanitizedSearch);
+
+  if (error != undefined) {
+    return;
+  }
+
   try {
-    const [blogs] = await database.query("SELECT title FROM blogs WHERE MATCH(title) AGAINST (? IN NATURAL LANGUAGE MODE)", [req.body.search]) as [Blog[], any];
+    const [blogs] = await database.query("SELECT title FROM blogs WHERE MATCH(title) AGAINST (? IN NATURAL LANGUAGE MODE)", [value]) as [Blog[], any];
 
     const renderedBlogs = blogs.map((blog) => {
       return `<div class='search-result'><a href='/blogs/view/${encodeURIComponent(blog.title)}'>${blog.title}</a></div>`

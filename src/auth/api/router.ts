@@ -4,47 +4,11 @@ import database from '../../database'
 import argon from 'argon2'
 import { getSessionCookieSettings, login, protect } from '../middleware';
 import { User, IsAuthedRequest } from '../../types';
-
-function validateEmail(email: string) {
-  let parts = email.split("@");
-
-  if (email.includes(" ")) return false;
-
-  if (parts.length != 2) return false;
-
-  let domain = parts[1].split(".");
-
-  if (domain.length != 2) return false;
-
-  if (domain[1].length < 2) return false; // the top level domain after the . is at least 2 fromCharCode();
-
-  return true;
-}
-
-
-function validatePassword(password: string) {
-  if (password.length < 10) return false
-  const numbers: any = "1234567890";
-  const capitals: any = "QWERTYUIOPASDFGHJKLZXCVBNM";
-
-  let containsNumber = false
-
-  for (let char of numbers) {
-    if (password.includes(char)) containsNumber = true
-  }
-
-  let containsCapital = false
-
-  for (let capital of capitals) {
-    if (password.includes(capital)) containsCapital = true
-  }
-
-  return containsCapital && containsNumber;
-}
-
+import { userValidator } from 'src/validation';
 
 router.post("/validate/email", async (req, res) => {
-  if (validateEmail(req.body.email)) {
+  const { error } = userValidator.validate({ email: req.body.email })
+  if (error == undefined) {
     try {
       let [rows] = await database.query("SELECT email FROM users WHERE email = ?", [req.body.email]) as [User[], any];
       if (rows.length !== 0) {
@@ -62,33 +26,32 @@ router.post("/validate/email", async (req, res) => {
 })
 
 router.post("/validate/password", (req, res) => {
-  if (validatePassword(req.body.password)) {
+  const { error } = userValidator.validate({ password: req.body.password })
+  if (error == undefined) {
     res.send("<div id='password-result' class='success'></div>");
   } else {
-    res.send("<div id='password-result' class='error'>Password must be at least 10 characters with at least 1 capital and 1 number</div>")
+    res.send(`<div id='password-result' class='error'>${error.message}</div>`)
   }
 })
 
 router.post("/signup", async (req, res) => {
   const { email, password, confirmPassword } = req.body;
+  const invalidInputsError = "<div id='signup-result' class='error'>Some inputs are invalid</div>"
 
-  if (
-    validateEmail(email) &&
-    validatePassword(password) &&
-    password.localeCompare(confirmPassword) === 0
-  ) {
+  const { value, error } = userValidator.validate({ email: email, password: password, confirm_password: confirmPassword })
+  if (error == undefined) {
     try {
-      const hashedPassword = await argon.hash(password);
-      const invalidInputsError = "<div id='signup-result' class='error'>Some inputs are invalid</div>"
-      let [rows] = await database.query("SELECT email FROM users WHERE email = ?", [email]) as [User[], any];
+      const hashedPassword = await argon.hash(value.password);
+
+      let [rows] = await database.query("SELECT email FROM users WHERE email = ?", [value.email]) as [User[], any];
       if (rows.length !== 0) {
         res.send(invalidInputsError);
         return
       }
 
-      [rows] = await database.query("INSERT INTO users (email, emailVerified, password) VALUES (?, false, ?)", [email, hashedPassword]) as [User[], any]
+      [rows] = await database.query("INSERT INTO users (email, emailVerified, password) VALUES (?, false, ?)", [value.email, hashedPassword]) as [User[], any]
 
-      let [signedToken, _] = await login(email, password);
+      let [signedToken, _] = await login(value.email, value.password);
 
       if (signedToken) {
         res.cookie("sessionToken", signedToken, {
@@ -106,8 +69,8 @@ router.post("/signup", async (req, res) => {
       res.send("<div id='signup-result' class='error'>SERVER ERROR</div>");
     }
   } else {
-    console.log(`email: ${validateEmail(email)}, password: ${validatePassword(password)}, confirm: ${password.localeCompare(confirmPassword) === 0}`)
-    res.send("<div id='signup-result' class='error'>Some inputs are invalid</div>");
+    req.logger.warn({})
+    res.send(invalidInputsError);
   }
 });
 

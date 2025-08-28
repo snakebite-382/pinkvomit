@@ -191,7 +191,11 @@ export function protect(getOptions: GetProtectOptions = (req: Request) => ({})) 
     if (ownsBlog) {
       let ownsBlogQuery
       if ("id" in ownsBlog) {
-        [ownsBlogQuery] = await database.query("SELECT id FROM blogs WHERE id = ? AND userID = ?", [ownsBlog.id, req.user.id]) as [Blog[], any];
+        if ("title" in ownsBlog) {
+          [ownsBlogQuery] = await database.query("SELECT id FROM blogs WHERE id = ? AND BINARY title = ? AND userID = ?", [ownsBlog.id, ownsBlog.title, req.user.id]) as [Blog[], any];
+        } else {
+          [ownsBlogQuery] = await database.query("SELECT id FROM blogs WHERE id = ? AND userID = ?", [ownsBlog.id, req.user.id]) as [Blog[], any];
+        }
       } else {
         [ownsBlogQuery] = await database.query("SELECT title FROM blogs WHERE BINARY title = ? and userID = ?", [ownsBlog.title, req.user.id]) as [Blog[], any];
       }
