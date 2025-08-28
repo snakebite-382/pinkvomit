@@ -5,9 +5,8 @@ import database from '../database';
 import { Blog, DecodedJWT, GetProtectOptions, IsAuthedRequest, Session, User } from '../types';
 import { NextFunction, Request, Response } from 'express';
 
-function getSessionToken(email: string): DecodedJWT {
+function getSessionToken(): DecodedJWT {
   return {
-    email: email,
     uuid: crypto.randomUUID(),
     exp: Date.now() + (2 * 60 * 60 * 1000),
     iat: Date.now()
@@ -23,13 +22,8 @@ export function getSessionCookieSettings() {
   }
 }
 
-export async function getUserByEmail(email: string): Promise<User> {
-  const [rows] = await database.query("SELECT * FROM users WHERE email = ?", [email]) as [User[], any];
-  return rows[0];
-};
-
 export async function login(email: string, password: string): Promise<[null, null, false] | [string, DecodedJWT, true]> {
-  let user = await getUserByEmail(email);
+  const [[user]] = await database.query("SELECT * FROM user WHERE BINARY email = ?", email) as [User[], any];
 
   if (user === undefined) {
     // invalid email
@@ -39,7 +33,7 @@ export async function login(email: string, password: string): Promise<[null, nul
   let validPassword = await argon.verify(user.password, password)
 
   if (validPassword) {
-    let token = getSessionToken(user.email);
+    let token = getSessionToken();
 
     let signedToken = signer.sign(token);
 
@@ -109,9 +103,9 @@ export async function keepAlive(req: Request, res: Response, next: NextFunction)
 
   if (Date.now() + (15 * 60 * 1000) >= decodedToken.exp) { // if will token be expired in 15 minutes
     try {
-      let user = await getUserByEmail(decodedToken.email);
+      const [[user]] = await database.query("SELECT users.* FROM sessions JOIN users ON sessions.userID = users.id WHERE sessions.id = ?", decodedToken) as [User[], any];
 
-      let token = getSessionToken(user.email);
+      let token = getSessionToken();
 
       let signedToken = signer.sign(token)
 
@@ -144,7 +138,10 @@ export async function fetchUser(req: Request, res: Response, next: NextFunction)
   }
 
   try {
-    req.user = await getUserByEmail(req.token.email) as User;
+    const [[user]] = await database.query("SELECT users.* FROM sessions JOIN users ON sessions.userID = users.id WHERE sessions.id = ?", [req.token.uuid]) as [User[], any];
+    req.logger.info({}, `Got user ${user}`)
+    req.user = user;
+
     const [blogs] = await database.query("SELECT * FROM blogs WHERE userID = ?", [req.user.id]) as [Blog[], any];
 
     let [sessions] = await database.query("SELECT selectedBlogID FROM sessions WHERE id = ?", [req.token.uuid]) as [Session[], any];

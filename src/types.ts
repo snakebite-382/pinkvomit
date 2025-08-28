@@ -372,7 +372,6 @@ export function IsAuthedRequest(req: Request): req is AuthedRequest {
 }
 
 export interface DecodedJWT {
-  email: string,
   uuid: ID,
   exp: number,
   iat: number
@@ -382,8 +381,6 @@ export function IsDecodedJWT(token: object): token is DecodedJWT {
   const valid = (
     "uuid" in token &&
     IsID(token.uuid) &&
-    "email" in token &&
-    typeof (token as any).email == "string" &&
     "exp" in token &&
     typeof (token as any).exp == "number" &&
     "iat" in token &&

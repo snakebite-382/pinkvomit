@@ -47,3 +47,12 @@ export const pageValidator = Joi.object({
 export function sanitizeInput(source: string): string {
   return insane(source, { allowedTags: [] }); // take input and strip any html elements
 }
+
+export function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}

@@ -1,9 +1,14 @@
 const createPageButton = document.getElementById("open-create-page");
 const createPageContainer = document.getElementById("create-page");
+
 const titleSelect = document.getElementById("title-select");
 const newTitleContainer = document.getElementById("new-title-container");
+
 const deleteButton = document.getElementById("delete-button");
 const contentInput = document.getElementById("content");
+
+const indexPage = document.getElementById("index-page");
+
 let previewResult = document.getElementById("preview-result");
 const parser = new DOMParser();
 
@@ -58,6 +63,25 @@ deleteButton.addEventListener("click", (e) => {
 
 contentInput.addEventListener("input", () => {
   htmx.trigger('#content', 'renderPreview');
+})
+
+document.addEventListener("DOMContentLoaded", () => {
+  const navs = indexPage.getElementsByClassName("pagesNav");
+  const id = window.location.toString().split("#")[1];
+
+  console.log(id)
+  if (id == undefined) return;
+
+  for (const nav of navs) {
+    const titleInputs = nav.getElementsByClassName("page-nav-item-title");
+
+    for (const titleElement of titleInputs) {
+      console.log(titleElement.value, id)
+      if (titleElement.value == id) {
+        titleElement.parentElement.click();
+      }
+    }
+  }
 })
 
 setVisibleElements()
