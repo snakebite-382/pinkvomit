@@ -51,8 +51,9 @@ router.post("/validate/title", protect((req) => ({ allowNoSelectedBlog: true }))
       }
     }
   } catch (err) {
-    console.error(err);
+    req.logger.error(err)
     res.send("<div id='title-result' class='error'>SERVER ERROR</div>");
+    return;
   }
 })
 
@@ -92,8 +93,9 @@ router.post("/create", protect((req) => ({ allowNoSelectedBlog: true })), async 
       res.send("<div id='create-result' class='error'>Some inputs are invalid</div>");
     }
   } catch (error) {
-    console.error(error);
+    req.logger.error(error);
     res.send("<div id='create-result' class='error'>SERVER ERROR</div>");
+    return;
   }
 });
 
@@ -122,8 +124,9 @@ router.put(
       res.send("<div id='select-result' class='success'></div>");
       return;
     } catch (error) {
-      console.error(error);
+      req.logger.error(error);
       res.send("<div id='select-result' class='error'>SERVER ERROR</div>");
+      return;
     }
   }
 );
@@ -151,7 +154,7 @@ router.put("/select/main",
       res.send("<div id='main-result' class='success'>Blog selected as main blog</div>")
       return;
     } catch (error) {
-      console.error(error)
+      req.logger.error(error)
       res.send("<div id='main-result' class='error'>SEVER ERROR</div>")
     }
   }
@@ -189,8 +192,9 @@ router.post("/delete/:id",
 
       res.send("<div id='#delete-result' class='success'>Deleted!</div>")
     } catch (error) {
-      console.error(error);
-      res.send("<div id='delete-result' class='error'> ")
+      req.logger.error(error)
+      res.send("<div id='delete-result' class='error'>SERVER ERROR</div>")
+      return;
     }
   }
 );
@@ -221,7 +225,7 @@ router.post("/follow", protect(), async (req, res) => {
 
     res.send("<div id='follow-result' class='success'>Followed!</div>")
   } catch (error) {
-    console.error(error)
+    req.logger.error(error);
     res.send("<div id='follow-result' class='error'>SERVER ERROR</div>");
     return;
   }
@@ -242,7 +246,7 @@ router.post("/search", protect(), async (req, res) => {
 
     res.send(renderedBlogs);
   } catch (error) {
-    console.error(error)
+    req.logger.error(error)
     res.send("<div id='search-result' class='error'>SERVER ERROR</div>")
   }
 

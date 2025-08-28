@@ -16,7 +16,7 @@ import blogsRouter from './blogs/router';
 import pagesRouter from "./pages/router";
 import { AuthedRequest } from 'types';
 import path from 'path';
-import crypto from 'crypto'
+import { addBlogToLogger, addSessionToLogger, addUserToLogger, requestLoggerMiddleware } from './logger';
 
 const app = express();
 const port = 3000;
@@ -45,8 +45,6 @@ app.use(
   })
 );
 
-// If you need access to the nonce in your templates, 
-// you can extract it from the CSP header
 app.use((req: Request, res: Response, next: NextFunction) => {
   const cspHeader = res.getHeader('Content-Security-Policy') as string;
   const nonceMatch = cspHeader?.match(/'nonce-([^']+)'/);
@@ -66,8 +64,12 @@ app.use(express.static(path.join(__dirname, "public")));
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
+app.use(requestLoggerMiddleware);
 app.use(authenticate);
+app.use(addSessionToLogger);
 app.use(fetchUser);
+app.use(addUserToLogger);
+app.use(addBlogToLogger);
 app.use(keepAlive);
 
 // basic example of how to render a page using the homepage.

@@ -50,7 +50,7 @@ router.post("/timeline", protect(), async (req, res) => {
 
     res.send(renderedPosts.join(""))
   } catch (error) {
-    console.error(error);
+    req.logger.error(error)
     res.send("<div id='timeline-result' class='error'>SERVER ERROR</div>")
   }
 });
@@ -86,8 +86,9 @@ router.get("/blog/:title", protect(), async (req, res) => {
 
     res.send(renderedPosts.join(""));
   } catch (error) {
-    console.error(error);
+    req.logger.error(error)
     res.sendStatus(500)
+    return
   }
 })
 
@@ -105,8 +106,9 @@ router.post("/create", protect(), async (req, res) => {
     await database.query("INSERT INTO posts (content, blogID) VALUES (?, ?)", [req.body.content, req.selectedBlog.id]);
     res.send("<div id='create-result' class='success'>Post Created!</div>")
   } catch (error) {
-    console.error(error)
+    req.logger.error(error)
     res.send("<div id='create-result' class='error'>SERVER ERROR</div>")
+    return;
   }
 });
 
@@ -160,7 +162,7 @@ router.post("/create/comment", protect(), async (req, res) => {
       res.send(renderComment(comment));
     }
   } catch (error) {
-    console.error(error);
+    req.logger.error(error);
     res.sendStatus(500);
   }
 });
@@ -190,14 +192,14 @@ router.post("/like", protect(), async (req, res) => {
       ${renderLikeButton(liked, req.body.post)}
     </div>`)
   } catch (error) {
-    console.error(error);
+    req.logger.error(error)
     return;
   }
 })
 
 router.get("/comments", protect(), async (req, res) => {
-  if (!req.authed || !req.selectedBlog) {
-    res.status(401).send("UNAUTH");
+  if (!IsAuthedRequest(req)) {
+    res.sendStatus(500);
     return;
   }
 
@@ -216,7 +218,7 @@ router.get("/comments", protect(), async (req, res) => {
     res.send(renderedComments);
 
   } catch (error) {
-    console.error(error);
+    req.logger.error(error);
     res.sendStatus(500);
   }
 })
@@ -237,8 +239,9 @@ router.get("/comments/replies", protect(), async (req, res) => {
 
     res.send(renderedReplies);
   } catch (error) {
-    console.error(error)
-    res.sendStatus(500)
+    req.logger.error(error)
+    res.sendStatus(500);
+    return;
   }
 });
 

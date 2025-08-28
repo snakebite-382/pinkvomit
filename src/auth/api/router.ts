@@ -53,7 +53,7 @@ router.post("/validate/email", async (req, res) => {
         res.send("<div id='email-result' class='success'></div>")
       }
     } catch (err) {
-      console.error(err);
+      req.logger.error(err)
       res.send("<div id='email-result' class='error'>SERVER ERROR</div>");
     }
   } else {
@@ -102,7 +102,7 @@ router.post("/signup", async (req, res) => {
         throw new Error("THIS SHOULD NEVER HAPPEN")
       }
     } catch (err) {
-      console.error(err);
+      req.logger.error(err)
       res.send("<div id='signup-result' class='error'>SERVER ERROR</div>");
     }
   } else {
@@ -124,7 +124,7 @@ router.post("/login", async (req, res) => {
   try {
     [signedToken, decodedToken, loggedIn] = await login(email, password);
   } catch (err) {
-    console.error(err)
+    req.logger.error(err);
     res.send("<div id='login-result' class='error'>SERVER ERROR</div>");
     return
   }
@@ -148,9 +148,10 @@ router.delete("/logout", protect((req) => ({ allowNoSelectedBlog: true })), asyn
   res.set("HX-Redirect", "/")
 
   try {
-    await database.query("DELETE FROM sessions WHERE uuid = ? AND userID = ?", [req.token.uuid, req.user.id])
+    await database.query("DELETE FROM sessions WHERE id = ? AND userID = ?", [req.token.uuid, req.user.id])
   } catch (error) {
-    console.error(error);
+    req.logger.error(error);
+    // dont return here so even if the database fails to delete the user can still be logged out by removing the cookie
   }
 
   res.clearCookie("sessionToken");

@@ -355,35 +355,35 @@ export function IsAuthedRequest(req: Request): req is AuthedRequest {
     (req.selectedBlog == null || IsBlog(req.selectedBlog))
   );
 
-  if (!valid) {
-    console.log("IsAuthedRequest failed", {
-      user: req.user,
-      isUser: req.user ? IsUser(req.user) : false,
-      authed: req.authed,
-      token: req.token,
-      isDecodedJWT: req.token ? IsDecodedJWT(req.token) : false,
-      blogs: req.blogs,
-      blogsValid: Array.isArray(req.blogs) && req.blogs.every(IsBlog),
-      selectedBlog: req.selectedBlog,
-      selectedBlogValid: req.selectedBlog == null || IsBlog(req.selectedBlog)
-    });
-  }
+  // if (!valid) {
+  //   console.log("IsAuthedRequest failed", {
+  //     user: req.user,
+  //     isUser: req.user ? IsUser(req.user) : false,
+  //     authed: req.authed,
+  //     token: req.token,
+  //     isDecodedJWT: req.token ? IsDecodedJWT(req.token) : false,
+  //     blogs: req.blogs,
+  //     blogsValid: Array.isArray(req.blogs) && req.blogs.every(IsBlog),
+  //     selectedBlog: req.selectedBlog,
+  //     selectedBlogValid: req.selectedBlog == null || IsBlog(req.selectedBlog)
+  //   });
+  // }
   return valid;
 }
 
 export interface DecodedJWT {
   email: string,
-  uuid: string,
+  uuid: ID,
   exp: number,
   iat: number
 }
 
 export function IsDecodedJWT(token: object): token is DecodedJWT {
   const valid = (
+    "uuid" in token &&
+    IsID(token.uuid) &&
     "email" in token &&
     typeof (token as any).email == "string" &&
-    "uuid" in token &&
-    typeof (token as any).uuid == "string" &&
     "exp" in token &&
     typeof (token as any).exp == "number" &&
     "iat" in token &&

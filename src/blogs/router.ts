@@ -31,7 +31,7 @@ router.get("/view/id/:id", protect(), async (req, res) => {
     blogTitle = blogTitle[0].title;
 
   } catch (error) {
-    console.error(error);
+    req.logger.error(error);
     res.sendStatus(500)
     return;
   }
@@ -57,7 +57,7 @@ router.get("/view/:title", protect(), async (req, res) => {
     indexPage = indexPage[0];
     [renderedPage, pageErrors] = await renderPage(indexPage, viewedBlog.title)
   } catch (error) {
-    console.error(error);
+    req.logger.error(error);
     res.sendStatus(500);
     return;
   }
@@ -84,7 +84,7 @@ router.get("/view/:title", protect(), async (req, res) => {
       let [pages] = await database.query("SELECT * FROM pages WHERE blogID = ?", [viewedBlog.id]) as [Page[], any];
       vars.pages = pages;
     } catch (error) {
-      console.error(error);
+      req.logger.error(error);
       res.sendStatus(500);
       return;
     }

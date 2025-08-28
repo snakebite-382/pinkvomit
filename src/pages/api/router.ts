@@ -45,7 +45,7 @@ router.post("/preview",
     </div>`
       res.send(result);
     } catch (error) {
-      console.error(error);
+      req.logger.error(error);
       res.sendStatus(500);
       return;
     }
@@ -111,7 +111,7 @@ router.post("/update",
         res.send(`<div id="update-result" class="success">Updated page ${pageTitle}</div>`)
       }
     } catch (error) {
-      console.error(error);
+      req.logger.error(error);
       res.send("<div id='update-result' class='error'>SERVER ERROR</div>")
       return;
     }
@@ -145,7 +145,7 @@ router.post("/navigate", protect(), async (req, res) => {
     res.send(renderedPage);
 
   } catch (error) {
-    console.error(error);
+    req.logger.error(error);
     res.send("<div class='error'>SERVER ERROR</div>")
     return;
   }
@@ -154,11 +154,11 @@ router.post("/navigate", protect(), async (req, res) => {
 
 router.get("/raw", protect(), async (req, res) => {
   try {
-    const [pages] = await database.query("SELECT content FROM pages WHERE id = ?", [req.query.id]) as [Page[], any];
+    const [pages] = await database.query("SELECT contents FROM pages WHERE id = ?", [req.query.id]) as [Page[], any];
 
     res.send(pages[0].content)
   } catch (error) {
-    console.error(error);
+    req.logger.error(error);
     res.sendStatus(500);
     return;
   }

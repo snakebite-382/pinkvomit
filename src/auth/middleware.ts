@@ -5,7 +5,6 @@ import database from '../database';
 import { Blog, DecodedJWT, GetProtectOptions, IsAuthedRequest, Session, User } from '../types';
 import { NextFunction, Request, Response } from 'express';
 
-// Helper functions:
 function getSessionToken(email: string): DecodedJWT {
   return {
     email: email,
@@ -72,7 +71,7 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
       return;
     }
   } catch (err) {
-    console.error(err);
+    req.logger.error(err)
     req.authed = false;
     req.token = null;
     return next();
@@ -88,7 +87,7 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
       return next();
     }
   } catch (err) {
-    console.error(err);
+    req.logger.error(err)
     req.authed = false;
     req.token = null;
     return next();
@@ -123,8 +122,12 @@ export async function keepAlive(req: Request, res: Response, next: NextFunction)
       await database.query("DELETE FROM sessions WHERE id = ?", [decodedToken.uuid]);
 
       await database.query("INSERT INTO sessions (id, userID, expiresAt, selectedBlogID) VALUES (?, ?, ?, ?)", [token.uuid, user.id, token.exp, selectedBlog[0].selectedBlogID])
+
+      req.logger = req.logger.child({
+        token: token,
+      })
     } catch (error) {
-      console.error(error)
+      req.logger.error(error)
       next();
     }
   }
@@ -135,7 +138,7 @@ export async function fetchUser(req: Request, res: Response, next: NextFunction)
   if (!req.authed || req.token == null || !('token' in req)) {
     req.user = null;
     req.blogs = [];
-    req.selectedBlog = null;
+    req.selectedBlog = undefined;
     next();
     return;
   }
@@ -149,12 +152,11 @@ export async function fetchUser(req: Request, res: Response, next: NextFunction)
     const [selectedBlogs] = await database.query("SELECT * FROM blogs WHERE id = ?", [sessions[0].selectedBlogID]) as [Blog[], any];
 
     req.blogs = blogs;
-    req.selectedBlog = selectedBlogs.length !== 0 ? selectedBlogs[0] : null;
+    req.selectedBlog = selectedBlogs.length !== 0 ? selectedBlogs[0] : undefined;
 
     next();
-
   } catch (error) {
-    console.error(error);
+    req.logger.error(error)
     next();
   }
 }
@@ -162,23 +164,26 @@ export async function fetchUser(req: Request, res: Response, next: NextFunction)
 export function protect(getOptions: GetProtectOptions = (req: Request) => ({})) {
   return async function(req: Request, res: Response, next: NextFunction): Promise<void> {
     if (req.user == null || !req.authed) {
+      req.logger.warn({}, "Protect failed: not logged in");
       res.sendStatus(401);
-      console.log("LOGGED OUT")
       return;
     }
 
     const options = getOptions(req);
+    const logger = req.logger.child({
+      protectOptions: options
+    })
     const { ownsBlog, allowNoSelectedBlog } = options;
 
     if (allowNoSelectedBlog) {
       if (!options.allowNoSelectedBlog && req.selectedBlog == null) { // if allowNoSelectedBlog is explicitly false for some reason
         res.sendStatus(401);
-        console.log("NO SELECTED BLOG")
+        logger.warn({}, "Protect failed: no selected blog")
         return;
       }
     } else if (req.selectedBlog == null) { // otherwise check selectedBlog by default
       res.sendStatus(401);
-      console.log("NO SELECTED BLOG")
+      logger.warn({}, "Protect failed: no selected blog")
       return;
     }
 
@@ -192,12 +197,11 @@ export function protect(getOptions: GetProtectOptions = (req: Request) => ({})) 
       }
       if (ownsBlogQuery.length === 0) {
         res.sendStatus(401);
-        console.log("DOES NOT OWN BLOG")
+        logger.warn({}, "Protect failed: user does not own blog");
         return;
       }
     }
 
-    // if all checks pass;
     next();
   }
 }
