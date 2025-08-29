@@ -94,9 +94,8 @@ export function IsUser(user: object): user is User {
 }
 
 export interface Session extends DB_OBJECT {
-  uuid: string,
   userID: ID,
-  selectedBlogID: ID,
+  selectedBlogID: ID | null,
   expiresAt: number,
 }
 
