@@ -1,208 +1,246 @@
-import crypto from 'crypto'
-import argon from 'argon2';
 import signer from './jwt';
-import database from '../database';
-import { Blog, DecodedJWT, GetProtectOptions, IsAuthedRequest, Session, User } from '../types';
+import { DecodedJWT, DecodedRefreshJWT, GetProtectOptions, ID, IsAuthedRequest, IsDecodedJWT, Session, User } from '../types';
 import { NextFunction, Request, Response } from 'express';
+import { SessionService, UserService } from './service';
+import { SessionRepository, UserRepository } from './repository';
+import { BlogRepository } from 'src/blogs/repository';
+import { BlogService } from 'src/blogs/service';
+import { PageRepository } from 'src/pages/repository';
+import { TokenExpiredError } from 'jsonwebtoken';
 
-function getSessionToken(): DecodedJWT {
+export function getRefeshToken(id: ID): DecodedRefreshJWT {
+  let expires = new Date();
+  expires.setDate(expires.getTime() + maxRefreshAge);
   return {
-    uuid: crypto.randomUUID(),
-    exp: Date.now() + (2 * 60 * 60 * 1000),
-    iat: Date.now()
+    refreshes: id,
+    exp: expires
   }
+}
+
+export function getSessionExpiry(): Date {
+  const expires = new Date();
+  expires.setDate(expires.getTime() + maxSessionAge);
+  return expires;
 }
 
 export function getSessionCookieSettings() {
   return {
-    maxAge: 2 * 60 * 60 * 1000,
+    maxAge: maxSessionAge,
     sameSite: true,
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production'
   }
 }
 
-export async function login(email: string, password: string): Promise<[null, null, false] | [string, DecodedJWT, true]> {
-  const [[user]] = await database.query("SELECT * FROM user WHERE BINARY email = ?", email) as [User[], any];
-
-  if (user === undefined) {
-    // invalid email
-    return [null, null, false];
+export function getRefeshCookieSettings() {
+  return {
+    maxAge: maxRefreshAge,
+    sameSite: true,
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production'
   }
-
-  let validPassword = await argon.verify(user.password, password)
-
-  if (validPassword) {
-    let token = getSessionToken();
-
-    let signedToken = signer.sign(token);
-
-    await database.query("INSERT INTO sessions (id, userID, expiresAt, selectedBlogID) VALUES (?, ?, ?, ?)", [token.uuid, user.id, token.exp, user.mainBlogID])
-
-    return [signedToken, token, true];
-  }
-
-  return [null, null, false];
 }
+
+export function getTokensFromSession(session: Session): { sessionToken: DecodedJWT, refreshToken: DecodedRefreshJWT } {
+  const sessionToken: DecodedJWT = {
+    uuid: session.id,
+    exp: session.expiresAt,
+    iat: session["created_at"]
+  }
+
+  const refreshToken: DecodedRefreshJWT = getRefeshToken(session.id);
+
+  return { sessionToken, refreshToken };
+}
+
+export const maxSessionAge = 15 * 60 * 1000;
+export const maxRefreshAge = 24 * 60 * 60 * 1000;
 
 // Middleware:
 
-export async function authenticate(req: Request, res: Response, next: NextFunction) {
-  if (!("sessionToken" in req.cookies)) {
-    req.authed = false;
-    req.token = null;
-    return next();
-  }
+export class AuthMiddleware {
+  static async tryRefresh(req: Request, res: Response, next: NextFunction) {
+    try {
+      if ("sessionToken" in req.cookies && req.cookies.sessionToken !== undefined && req.cookies.sessionToken !== null) {
+        try {
+          const sessionToken = signer.verify<DecodedJWT>(req.cookies.sessionToken);
+          if (typeof sessionToken !== "string") {
+            next();
+            return;
+          }
+        } catch (error) {
+          if (!(error instanceof TokenExpiredError)) {
+            throw error;
+          }
+        }
+      }
 
-  let verifiedToken
+      if ("refreshToken" in req.cookies && req.cookies.refreshToken !== undefined && req.cookies.sessionToken !== null) {
+        const sessionService = new SessionService(new SessionRepository(), new UserRepository(), new BlogRepository());
 
-  try {
-    verifiedToken = signer.verify(req.cookies.sessionToken);
+        const refreshToken = signer.verify<DecodedRefreshJWT>(req.cookies.refreshToken);
+        if (typeof refreshToken === "string") {
+          next();
+          return;
+        }
 
-    if (typeof verifiedToken == "string") {
-      req.authed = false;
-      req.token = null;
+        const session = await sessionService.getSession(refreshToken.refreshes);
+
+        if (session === null) {
+          res.clearCookie("refreshToken");
+          throw new Error("Session invalidated");
+        }
+
+        const newSession = await sessionService.rotate(session.id, session.userID, getSessionExpiry());
+
+        const { sessionToken, refreshToken: newRefreshToken } = getTokensFromSession(newSession);
+
+        const signedSessionToken = signer.sign(sessionToken);
+        const signedRefreshToken = signer.sign(newRefreshToken);
+
+        res.clearCookie("refreshToken");
+        res.clearCookie("sessionToken");
+        res.cookie("sessionToken", signedSessionToken, getSessionCookieSettings());
+        res.cookie("refreshToken", signedRefreshToken, getRefeshCookieSettings());
+      }
+    } catch (error) {
+      req.logger.error(error);
+      next();
       return;
     }
-  } catch (err) {
-    req.logger.error(err)
-    req.authed = false;
-    req.token = null;
-    return next();
   }
 
-  try {
-
-    let [rows] = await database.query("SELECT id FROM sessions WHERE id = ?", [verifiedToken.uuid]) as [Session[], any];
-
-    if (rows.length === 0) {
+  static async authenticate(req: Request, res: Response, next: NextFunction) {
+    if (!("sessionToken" in req.cookies)) {
       req.authed = false;
       req.token = null;
-      return next();
+      next();
+      return;
     }
-  } catch (err) {
-    req.logger.error(err)
-    req.authed = false;
-    req.token = null;
-    return next();
-  }
 
-  req.authed = true;
-  req.token = verifiedToken;
-
-  return next();
-}
-
-export async function keepAlive(req: Request, res: Response, next: NextFunction) {
-  if (!IsAuthedRequest(req)) {
-    next();
-    return;
-  }
-
-  let decodedToken = signer.decode(req.cookies.sessionToken);
-
-  if (Date.now() + (15 * 60 * 1000) >= decodedToken.exp) { // if will token be expired in 15 minutes
     try {
-      const [[user]] = await database.query("SELECT users.* FROM sessions JOIN users ON sessions.userID = users.id WHERE sessions.id = ?", decodedToken) as [User[], any];
+      const verifiedToken = signer.verify<DecodedJWT>(req.cookies.sessionToken);
 
-      let token = getSessionToken();
+      if (typeof verifiedToken === "string") {
+        throw new Error("Invalid token");
+      }
 
-      let signedToken = signer.sign(token)
+      if (!IsDecodedJWT(verifiedToken)) {
+        throw new Error("Invalid token");
+      }
 
-      res.cookie("sessionToken", signedToken, getSessionCookieSettings())
+      const sessionService = new SessionService(new SessionRepository(), new UserRepository(), new BlogRepository());
+      const session = sessionService.getSession(verifiedToken.uuid);
 
-      const [selectedBlog] = await database.query("SELECT selectedBlogID FROM sessions WHERE id = ?", [decodedToken.uuid]) as [Session[], any];
-
-      await database.query("DELETE FROM sessions WHERE id = ?", [decodedToken.uuid]);
-
-      await database.query("INSERT INTO sessions (id, userID, expiresAt, selectedBlogID) VALUES (?, ?, ?, ?)", [token.uuid, user.id, token.exp, selectedBlog[0].selectedBlogID])
-
-      req.logger = req.logger.child({
-        token: token,
-      })
+      if (session === null) {
+        throw new Error("Session does not exist");
+      }
     } catch (error) {
-      req.logger.error(error)
+      req.logger.error(error);
+      req.authed = false;
+      req.token = null;
       next();
     }
   }
-  next()
-}
 
-export async function fetchUser(req: Request, res: Response, next: NextFunction) {
-  if (!req.authed || req.token == null || !('token' in req)) {
-    req.user = null;
-    req.blogs = [];
-    req.selectedBlog = undefined;
-    next();
-    return;
-  }
-
-  try {
-    const [[user]] = await database.query("SELECT users.* FROM sessions JOIN users ON sessions.userID = users.id WHERE sessions.id = ?", [req.token.uuid]) as [User[], any];
-    req.logger.info({}, `Got user ${user}`)
-    req.user = user;
-
-    const [blogs] = await database.query("SELECT * FROM blogs WHERE userID = ?", [req.user.id]) as [Blog[], any];
-
-    let [sessions] = await database.query("SELECT selectedBlogID FROM sessions WHERE id = ?", [req.token.uuid]) as [Session[], any];
-
-    const [selectedBlogs] = await database.query("SELECT * FROM blogs WHERE id = ?", [sessions[0].selectedBlogID]) as [Blog[], any];
-
-    req.blogs = blogs;
-    req.selectedBlog = selectedBlogs.length !== 0 ? selectedBlogs[0] : undefined;
-
-    next();
-  } catch (error) {
-    req.logger.error(error)
-    next();
-  }
-}
-
-export function protect(getOptions: GetProtectOptions = (req: Request) => ({})) {
-  return async function(req: Request, res: Response, next: NextFunction): Promise<void> {
-    if (req.user == null || !req.authed) {
-      req.logger.warn({}, "Protect failed: not logged in");
-      res.sendStatus(401);
+  static async fetchUser(req: Request, res: Response, next: NextFunction) {
+    if (!req.authed || req.token === null || req.token === undefined) {
+      req.user = null;
+      req.blogs = [];
+      req.selectedBlog = undefined;
+      next();
       return;
     }
 
-    const options = getOptions(req);
-    const logger = req.logger.child({
-      protectOptions: options
-    })
-    const { ownsBlog, allowNoSelectedBlog } = options;
+    try {
+      const userService = new UserService(new UserRepository(), new BlogRepository());
+      const blogService = new BlogService(new BlogRepository(), new PageRepository(), new UserRepository());
+      const sessionService = new SessionService(new SessionRepository(), new UserRepository(), new BlogRepository());
 
-    if (allowNoSelectedBlog) {
-      if (!options.allowNoSelectedBlog && req.selectedBlog == null) { // if allowNoSelectedBlog is explicitly false for some reason
+      const session = await sessionService.getSession(req.token.uuid);
+      if (session === null) {
+        throw new Error("Session does not exist");
+      }
+
+      const currentUser = await userService.getUserByID(session.userID);
+      if (currentUser === null) {
+        throw new Error("User does not exist");
+      }
+      req.user = currentUser;
+
+      if (session.selectedBlogID !== null) {
+        const selectedBlog = await blogService.getBlogByID(session.selectedBlogID);
+        if (selectedBlog === null) throw new Error("Selected blog does not exist")
+
+        req.selectedBlog = { id: selectedBlog.id, title: selectedBlog.title, userID: currentUser.id }
+
+        const blogs = await blogService.getBlogsByUser(currentUser.id) || [];
+        req.blogs = blogs.map(blog => ({ id: blog.id, title: blog.title, userID: currentUser.id }));
+      }
+      next();
+    } catch (error) {
+      req.logger.error(error);
+      res.sendStatus(500);
+    }
+  }
+
+  static protect(getOptions: GetProtectOptions = (req: Request) => ({})) {
+    return async function(req: Request, res: Response, next: NextFunction): Promise<void> {
+      if (req.user == null || !req.authed) {
+        req.logger.warn({}, "Protect failed: not logged in");
+        res.sendStatus(401);
+        return;
+      }
+
+      const options = getOptions(req);
+      const logger = req.logger.child({
+        protectOptions: options
+      })
+      const { ownsBlog, allowNoSelectedBlog } = options;
+
+      if (allowNoSelectedBlog) {
+        if (!options.allowNoSelectedBlog && req.selectedBlog == null) { // if allowNoSelectedBlog is explicitly false for some reason
+          res.sendStatus(401);
+          logger.warn({}, "Protect failed: no selected blog")
+          return;
+        }
+      } else if (req.selectedBlog == null) { // otherwise check selectedBlog by default
         res.sendStatus(401);
         logger.warn({}, "Protect failed: no selected blog")
         return;
       }
-    } else if (req.selectedBlog == null) { // otherwise check selectedBlog by default
-      res.sendStatus(401);
-      logger.warn({}, "Protect failed: no selected blog")
-      return;
-    }
 
-
-    if (ownsBlog) {
-      let ownsBlogQuery
-      if ("id" in ownsBlog) {
-        if ("title" in ownsBlog) {
-          [ownsBlogQuery] = await database.query("SELECT id FROM blogs WHERE id = ? AND BINARY title = ? AND userID = ?", [ownsBlog.id, ownsBlog.title, req.user.id]) as [Blog[], any];
-        } else {
-          [ownsBlogQuery] = await database.query("SELECT id FROM blogs WHERE id = ? AND userID = ?", [ownsBlog.id, req.user.id]) as [Blog[], any];
+      try {
+        if (ownsBlog) {
+          const blogService = new BlogService(new BlogRepository(), new PageRepository(), new UserRepository());
+          if (ownsBlog.id !== undefined && ownsBlog.title !== undefined) {
+            const blog = await blogService.getBlogByTitle(ownsBlog.title);
+            if (blog === null) {
+              throw new Error("Blog does not exist");
+            }
+            if (blog.id != ownsBlog.id || blog.userID != req.user.id) {
+              throw new Error("User does not own blog");
+            }
+          } else if (ownsBlog.id !== undefined) {
+            const owner = await blogService.userOwnsBlog(ownsBlog.id, req.user.id);
+            if (!owner) {
+              throw new Error("User does not own blog");
+            }
+          } else if (ownsBlog.title !== undefined) {
+            const owner = await blogService.userOwnsBlogTitle(ownsBlog.title, req.user.id);
+            if (!owner) {
+              throw new Error("User does not own blog");
+            }
+          }
         }
-      } else {
-        [ownsBlogQuery] = await database.query("SELECT title FROM blogs WHERE BINARY title = ? and userID = ?", [ownsBlog.title, req.user.id]) as [Blog[], any];
-      }
-      if (ownsBlogQuery.length === 0) {
+      } catch (error) {
         res.sendStatus(401);
-        logger.warn({}, "Protect failed: user does not own blog");
+        logger.warn({}, "Protect failed: does not own blog");
+        logger.error(error);
         return;
       }
-    }
 
-    next();
+      next();
+    }
   }
 }

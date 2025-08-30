@@ -2,25 +2,29 @@ import { ID, User, Session } from "types";
 import { SessionRepositoryInterface, UserRepositoryInterface } from "./repository";
 import argon from "argon2";
 import { ServiceError } from "src/service";
-import { BlogsRepositoryInterface } from "src/blogs/repository";
-import { BlogServiceInterface } from "src/blogs/service";
+import { BlogRepositoryInterface } from "src/blogs/repository";
+import database from "../database";
+import { error } from "console";
+import { getSessionExpiry } from "./middleware";
+import { Primitives } from "joi";
 
 export interface UserServiceInterface {
   createUser(email: string, password: string): Promise<User | null>;
   setMainBlogID(userID: ID, blogID: ID): Promise<boolean>;
   getUserByID(userID: ID): Promise<User | null>;
+  getUser(email: string): Promise<User | null>;
   userExists(userID: ID): Promise<boolean>;
+  emailInUse(email: string): Promise<boolean>;
 }
 
 
 export class UserService implements UserServiceInterface {
-  constructor(private userRepository: UserRepositoryInterface, private blogsRepo: BlogsRepositoryInterface) { }
+  constructor(private userRepository: UserRepositoryInterface, private blogsRepo: BlogRepositoryInterface) { }
 
   async createUser(email: string, password: string): Promise<User | null> {
     const errors: ServiceError[] = [];
-    const emailUsed = await this.userRepository.findOne({ email: email });
 
-    if (emailUsed) {
+    if (await this.emailInUse(email)) {
       throw new Error("Email already in use");
     }
 
@@ -61,23 +65,42 @@ export class UserService implements UserServiceInterface {
     return (await this.getUserByID(userID)) !== null;
   }
 
-}
-
-export class SessionService {
-  constructor(private sessionRepository: SessionRepositoryInterface, private userService: UserServiceInterface, private blogService: BlogServiceInterface) {
+  async emailInUse(email: string) {
+    const user = this.userRepository.findOne({ email });
+    return user !== null;
   }
 
-  async createSession(userID: ID, mainBlogID: ID): Promise<Session | null> {
-    const user = await this.userService.getUserByID(userID);
+  async getUser(email: string) {
+    return await this.userRepository.findOne({ email });
+  }
+}
+
+
+export interface SessionServiceInterface {
+  createSession(userID: ID, mainBlogID: ID, expires: Date): Promise<Session | null>
+  selectBlog(sessionID: ID, userID: ID, blogID: ID): Promise<Session | null>
+  deleteSession(sessionID: ID, userID: ID): Promise<boolean>
+  getSession(sessionID: ID): Promise<Session | null>
+  rotate(sessionID: ID, userID: ID, expires: Date): Promise<Session>
+}
+
+export class SessionService implements SessionServiceInterface {
+  constructor(private sessionRepository: SessionRepositoryInterface, private userRepo: UserRepositoryInterface, private blogsRepo: BlogRepositoryInterface) {
+  }
+
+  async createSession(userID: ID, mainBlogID: ID | null, expires: Date): Promise<Session | null> {
+    const user = await this.userRepo.findOne({ id: userID });
 
     if (user === null) {
       throw new Error("User does not exist")
     }
 
-    const ownsBlog = await this.blogService.userOwnsBlog(userID, mainBlogID);
+    if (mainBlogID !== null) {
+      const ownsBlog = await this.blogsRepo.findOne({ userID, id: mainBlogID });
 
-    if (!ownsBlog) {
-      throw new Error("User does not own blog");
+      if (ownsBlog === null) {
+        throw new Error("User does not own blog");
+      }
     }
 
     const id = crypto.randomUUID();
@@ -85,7 +108,7 @@ export class SessionService {
     let session = {
       id: id,
       userID: userID,
-      expiresAt: Date.now() + (2 * 60 * 60 * 1000),
+      expiresAt: expires, // session tokens expire every 15 minites;
       selectedBlogID: user.mainBlogID
     }
 
@@ -93,14 +116,61 @@ export class SessionService {
   }
 
   async selectBlog(sessionID: ID, userID: ID, blogID: ID): Promise<Session | null> {
-    if (!(await this.userService.userExists(userID))) return null;
+    if ((await this.userRepo.findOne({ id: userID })) === null) return null;
 
-    const ownsBlog = await this.blogService.userOwnsBlog(userID, blogID);
+    const ownsBlog = await this.blogsRepo.findOne({ userID, id: blogID });
 
-    if (!ownsBlog) {
+    if (ownsBlog === null) {
       throw new Error("User does not own blog");
     }
 
+    const ownsSession = await this.sessionRepository.findOne({ id: sessionID, userID });
+
+    if (ownsSession === null) {
+      throw new Error("User does not own session");
+    }
+
     return await this.sessionRepository.update(sessionID, { selectedBlogID: blogID });
+  }
+
+  async deleteSession(sessionID: ID, userID: ID) {
+    const ownsSession = await this.sessionRepository.findOne({ id: sessionID, userID });
+    if (ownsSession === null) {
+      throw new Error("User does not own session");
+    }
+    return await this.sessionRepository.delete(sessionID);
+  }
+
+  async getSession(sessionID: ID) {
+    return await this.sessionRepository.findOne({ id: sessionID });
+  }
+
+  async rotate(sessionID: ID, userID: ID, expires: Date): Promise<Session> {
+    const connection = await database.getConnection();
+    try {
+      connection.beginTransaction();
+      this.sessionRepository.setConnection(connection);
+
+      await this.deleteSession(sessionID, userID);
+      const user = await this.userRepo.findOne({ id: userID });
+
+      if (user === null) {
+        throw new Error("User does not exist");
+      }
+
+      const session = await this.createSession(userID, user.mainBlogID, expires);
+
+      if (session === null) {
+        throw new Error("Couldn't create session");
+      }
+
+      connection.commit();
+      this.sessionRepository.setConnection(database);
+
+      return session;
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    }
   }
 }

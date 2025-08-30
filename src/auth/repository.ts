@@ -2,6 +2,7 @@ import { parsePartial, Repository } from "src/repository";
 import { ID, Session, User } from "types";
 import database from "../database";
 import { QueryOptions, ResultSetHeader } from "mysql2";
+import { Connection, Pool } from "mysql2/promise";
 
 export interface UserRepositoryInterface extends Repository<User> {
   insert(user: {
@@ -15,16 +16,21 @@ export interface UserRepositoryInterface extends Repository<User> {
 export class UserRepository implements UserRepositoryInterface {
   private readonly validFindValues = ["email", "id", "mainBlogID"]
   private readonly validUpdateValues = ["email", "password", "emailVerified", "mainBlogID"]
+  private conn: Pool | Connection = database;
+
+  setConnection(conn: Pool | Connection) {
+    this.conn = conn;
+  }
 
   async insert(user: User): Promise<User | null> {
-    const [userInsert] = await database.query<ResultSetHeader>("INSERT INTO users (id, email, password) VALUES (?, ?, ?)", [user.id, user.email, user.password]);
+    const [userInsert] = await this.conn.query<ResultSetHeader>("INSERT INTO users (id, email, password) VALUES (?, ?, ?)", [user.id, user.email, user.password]);
     return await this.findOne({ id: user.id });
   }
 
   async update(id: ID, user: Partial<User>, options: QueryOptions | {} = {}): Promise<User | null> {
     const { keyString, values } = parsePartial<User>(user, this.validUpdateValues, { ...options, joiner: ", " });
 
-    const [result] = await database.query<ResultSetHeader>(
+    const [result] = await this.conn.query<ResultSetHeader>(
       `UPDATE users SET ${keyString} WHERE id = ?`,
       [...values, id]
     );
@@ -33,7 +39,7 @@ export class UserRepository implements UserRepositoryInterface {
       return null;
     }
 
-    const [[updatedUser]] = await database.query(
+    const [[updatedUser]] = await this.conn.query(
       "SELECT * FROM users WHERE id = ?",
       [id]
     ) as [User[], any];
@@ -42,7 +48,7 @@ export class UserRepository implements UserRepositoryInterface {
   }
 
   async delete(id: ID) {
-    const [deleteUser] = await database.query<ResultSetHeader>("DELETE FROM users WHERE id = ? ", id);
+    const [deleteUser] = await this.conn.query<ResultSetHeader>("DELETE FROM users WHERE id = ? ", id);
 
     return deleteUser.affectedRows > 0;
   }
@@ -50,7 +56,7 @@ export class UserRepository implements UserRepositoryInterface {
   async find(user: Partial<User>, options: QueryOptions | {} = {}): Promise<User[] | null> {
     const { keyString, values } = parsePartial<User>(user, this.validFindValues, options);
 
-    const [userResult] = await database.query(`SELECT * FROM users WHERE ${keyString}`, [...values]) as [User[], any];
+    const [userResult] = await this.conn.query(`SELECT * FROM users WHERE ${keyString}`, [...values]) as [User[], any];
 
     return userResult.length > 0 ? userResult : null;
   }
@@ -62,7 +68,7 @@ export class UserRepository implements UserRepositoryInterface {
   }
 
   async deleteByEmail(email: string): Promise<boolean> {
-    const [deleteUser] = await database.query<ResultSetHeader>("DELETE FROM users WHERE BINARY email = ?", email);
+    const [deleteUser] = await this.conn.query<ResultSetHeader>("DELETE FROM users WHERE BINARY email = ?", email);
 
     return deleteUser.affectedRows > 0;
   }
@@ -73,16 +79,21 @@ export interface SessionRepositoryInterface extends Repository<Session> {
     id: ID,
     userID: ID
     selectedBlogID: ID | null,
-    expiresAt: number
+    expiresAt: Date
   }): Promise<Session | null>
 }
 
 export class SessionRepository implements SessionRepositoryInterface {
   private readonly validFindValues = ["id", "userID"]
   private readonly validUpdateValues = ["selectedBlogID"]
+  private conn: Pool | Connection = database;
+
+  setConnection(conn: typeof this.conn) {
+    this.conn = conn;
+  }
 
   async insert(session: Session): Promise<Session | null> {
-    await database.query<ResultSetHeader>(`
+    await this.conn.query<ResultSetHeader>(`
       INSERT INTO sessions (id, userID, selectedBlogID, expiresAt) 
       VALUES (?, ?, ?, ?)`, [session.id, session.userID, session.selectedBlogID, session.expiresAt]);
 
@@ -92,7 +103,7 @@ export class SessionRepository implements SessionRepositoryInterface {
   async find(session: Partial<Session>, options: QueryOptions | {} = {}): Promise<Session[] | null> {
     const { keyString, values } = parsePartial<Session>(session, this.validFindValues, options)
 
-    const [sessionResult] = await database.query(`SELECT * FROM sessions WHERE ${keyString}`, [...values]) as [Session[], any];
+    const [sessionResult] = await this.conn.query(`SELECT * FROM sessions WHERE ${keyString}`, [...values]) as [Session[], any];
 
     return sessionResult.length > 0 ? sessionResult : null;
   }
@@ -106,19 +117,19 @@ export class SessionRepository implements SessionRepositoryInterface {
   async update(id: ID, session: Partial<Session>, options: QueryOptions | {} = {}): Promise<Session | null> {
     const { keyString, values } = parsePartial<Session>(session, this.validUpdateValues, { ...options, joiner: ", " });
 
-    const [updateResult] = await database.query<ResultSetHeader>(`UPDATE sessions SET ${keyString} WHERE id = ?`, [...values, id]);
+    const [updateResult] = await this.conn.query<ResultSetHeader>(`UPDATE sessions SET ${keyString} WHERE id = ?`, [...values, id]);
 
     if (updateResult.affectedRows === 0) {
       return null;
     }
 
-    const [[updatedSession]] = await database.query("SELECT * FROM sessions WHERE id = ?", [id]) as [Session[], any];
+    const [[updatedSession]] = await this.conn.query("SELECT * FROM sessions WHERE id = ?", [id]) as [Session[], any];
 
     return updatedSession || null;
   }
 
   async delete(id: ID): Promise<boolean> {
-    const [deleteUser] = await database.query<ResultSetHeader>("DELETE FROM sessions WHERE id = ?", [id]);
+    const [deleteUser] = await this.conn.query<ResultSetHeader>("DELETE FROM sessions WHERE id = ?", [id]);
 
     return deleteUser.affectedRows > 0;
   }

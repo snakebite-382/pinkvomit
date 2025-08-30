@@ -1,6 +1,6 @@
 import { DecodedJWT } from "../types";
 
-const jsonwebtoken = require('jsonwebtoken');
+import jsonwebtoken from "jsonwebtoken";
 
 const jwtSecret: string | undefined = process.env.jwtsecret || "";
 
@@ -14,12 +14,12 @@ const signer = {
   },
 
 
-  verify: (token: string): DecodedJWT | string => {
-    return (jsonwebtoken.verify(token, jwtSecret));
+  verify<T>(token: string): T | string {
+    return jsonwebtoken.verify(token, jwtSecret) as T | string;
   },
 
-  decode: (token: string) => {
-    return /**@type {DecodedJWT} */ (jsonwebtoken.decode(token));
+  decode<T>(token: string): T | null {
+    return jsonwebtoken.decode(token) as T | null;
   }
 }
 
